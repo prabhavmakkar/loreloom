@@ -34,6 +34,13 @@ test('matches aliases case-insensitively at word boundaries', async () => {
   expect(ctx).toContain('### Mira Vale (character)')
 })
 
+test('first word of a name alone does not match without an alias', async () => {
+  await book.createCard('character', { name: 'Zane Brightwater' })
+  await book.saveChapter('the-ember-gate', { body: 'Zane ran. Brightwater was far.' })
+  const ctx = await buildContext(book, { chapterId: 'the-ember-gate' })
+  expect(ctx).not.toContain('Zane Brightwater')
+})
+
 test('word boundary prevents partial matches', async () => {
   await book.saveChapter('the-ember-gate', { body: 'A mirage shimmered over Kaelstrom.' })
   const ctx = await buildContext(book, { chapterId: 'the-ember-gate' })

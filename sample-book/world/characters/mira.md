@@ -3,6 +3,7 @@ id: mira
 name: Mira Vale
 aliases:
   - the Nail-Wright
+  - Mira
 summary: An iron-smith who knows the old counters to ember-magic.
 role: ally
 relationships:

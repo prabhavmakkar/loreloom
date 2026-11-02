@@ -3,6 +3,7 @@ id: queen
 name: The Ember Queen
 aliases:
   - the Queen
+  - Queen
   - Her Majesty
 summary: Ruler of the capital, who feeds on oaths and ember-fire.
 role: antagonist

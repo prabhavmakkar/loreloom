@@ -3,6 +3,7 @@ id: kael
 name: Kael Thorne
 aliases:
   - the Oathbreaker
+  - Kael
 summary: A wary courier carrying his father's broken oath.
 role: protagonist
 relationships:

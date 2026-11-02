@@ -1,6 +1,8 @@
 ---
 id: aldric
 name: Aldric Thorne
+aliases:
+  - Aldric
 summary: Kael's father, who swore the oath that broke the family.
 role: mentor
 ---

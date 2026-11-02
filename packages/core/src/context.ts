@@ -11,19 +11,13 @@ const CHAPTER_CAP = 40_000
 const SELECTION_WINDOW = 4_000
 const SUMMARY_CAP = 200
 const OMITTED = '[…earlier text omitted…]'
-const ARTICLES = new Set(['the', 'a', 'an'])
 
 function escapeRe(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function names(card: Card): string[] {
-  const out = [card.name, ...card.aliases]
-  if (card.kind === 'character') {
-    const words = card.name.trim().split(/\s+/)
-    if (words.length > 1 && !ARTICLES.has(words[0]!.toLowerCase())) out.push(words[0]!)
-  }
-  return out.map((n) => n.trim()).filter(Boolean)
+  return [card.name, ...card.aliases].map((n) => n.trim()).filter(Boolean)
 }
 
 function isNamedIn(card: Card, text: string): boolean {
