@@ -1108,3 +1108,128 @@ button.small {
   font: 0.9rem/1.5 var(--font-prose);
   color: var(--ink-2);
 }
+
+/* ---------- character map and world browser ---------- */
+.map-page {
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
+}
+.char-map {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  height: 62vh;
+  min-height: 340px;
+  border-bottom: 1px solid var(--rule);
+}
+.map-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper-2);
+}
+.map-hint {
+  font-size: 0.8rem;
+}
+.map-canvas {
+  flex: 1;
+  min-height: 0;
+  background: var(--paper);
+}
+.map-empty {
+  position: absolute;
+  inset: 50% 0 auto;
+  text-align: center;
+}
+.map-popover {
+  position: absolute;
+  left: 50%;
+  bottom: 1.2rem;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-2);
+  box-shadow: var(--shadow);
+}
+.map-popover input {
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--paper);
+}
+.map-error {
+  position: absolute;
+  left: 1rem;
+  bottom: 0.5rem;
+}
+.world-browser {
+  max-width: 62rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 1.2rem 2rem 5rem;
+}
+.world-browser .tabs {
+  display: flex;
+  gap: 0.3rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid var(--rule);
+}
+.world-browser .tabs button {
+  padding: 0.45rem 0.9rem;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: none;
+  color: var(--ink-2);
+}
+.world-browser .tabs button.on {
+  color: var(--ink);
+  border-bottom-color: var(--accent);
+}
+.world-browser .tabs .count {
+  color: var(--ink-3);
+  font-size: 0.75rem;
+}
+.glossary {
+  margin: 0;
+  columns: 2 22rem;
+  column-gap: 2.5rem;
+}
+.glossary .entry {
+  break-inside: avoid;
+  margin-bottom: 1rem;
+}
+.glossary dt {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+.glossary dt button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-prose);
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--ink);
+}
+.glossary dt button:hover {
+  color: var(--accent);
+}
+.glossary .pron {
+  font-family: var(--font-prose);
+  font-style: italic;
+  color: var(--ink-2);
+}
+.glossary dd {
+  margin: 0.15rem 0 0;
+  font-family: var(--font-prose);
+  color: var(--ink-2);
+  line-height: 1.5;
+}

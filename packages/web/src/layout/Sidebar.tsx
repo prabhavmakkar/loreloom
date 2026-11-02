@@ -41,6 +41,19 @@ export function Sidebar() {
       </ul>
       <h2 className="label">World</h2>
       <ul>
+        <li>
+          <button
+            type="button"
+            className={`row${view === 'world' && !world.kind ? ' on' : ''}`}
+            aria-current={view === 'world' && !world.kind ? 'true' : undefined}
+            onClick={() => {
+              setWorld({ kind: null, cardId: null })
+              setView('world')
+            }}
+          >
+            <span className="name">Map &amp; reference</span>
+          </button>
+        </li>
         {CARD_KINDS.map((k) => (
           <li key={k}>
             <button

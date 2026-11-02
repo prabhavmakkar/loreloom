@@ -5,6 +5,8 @@ import type { CardKind } from '../api.ts'
 import type { SaveState } from '../editor/Editor.tsx'
 import { useBook } from '../state/BookContext.tsx'
 import { CardEditor } from './CardEditor.tsx'
+import { WorldBrowser } from './Browser.tsx'
+import { CharacterMap } from './CharacterMap.tsx'
 
 const SHELF_TITLE: Record<CardKind, string> = { character: 'Characters', place: 'Places', rule: 'Rules', term: 'Glossary' }
 const NEW_LABEL: Record<CardKind, string> = { character: 'character', place: 'place', rule: 'rule', term: 'term' }
@@ -72,12 +74,20 @@ function Shelf({ kind }: { kind: CardKind }) {
   )
 }
 
-/** The World view: a shelf's card list, or one open card. (The character map comes later.) */
+function MapPage() {
+  const { cards, setWorld, refresh } = useBook()
+  return (
+    <div className="map-page">
+      <CharacterMap characters={cards.character} onOpen={(id) => setWorld({ kind: 'character', cardId: id })} onChanged={refresh} />
+      <WorldBrowser />
+    </div>
+  )
+}
+
+/** The World view: the character map with the world browser, a shelf's card list, or one open card. */
 export function WorldView({ onSaveState }: { onSaveState(s: SaveState | null): void }) {
   const { world, setWorld } = useBook()
-  if (!world.kind) {
-    return <div className="placeholder-view">Pick a shelf in the sidebar. The character map is coming later.</div>
-  }
+  if (!world.kind) return <MapPage />
   const { kind, cardId } = world
   if (!cardId) return <Shelf kind={kind} />
   return (
