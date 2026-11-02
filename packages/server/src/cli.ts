@@ -6,7 +6,7 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serve } from '@hono/node-server'
 import type { Hono } from 'hono'
-import type { AiProvider } from './ai/provider.ts'
+import { ClaudeCodeProvider } from './ai/claudeCode.ts'
 import { createApp } from './app.ts'
 
 const HOST = '127.0.0.1'
@@ -45,12 +45,6 @@ function openBrowser(url: string): void {
   child.unref()
 }
 
-// Placeholder until the real provider lands (Task 6).
-const unavailableProvider: AiProvider = {
-  status: async () => ({ available: false, reason: 'not_installed' }),
-  async *run() {},
-}
-
 async function main(): Promise<void> {
   const args = process.argv.slice(2)
   const noOpen = args.includes('--no-open')
@@ -63,7 +57,7 @@ async function main(): Promise<void> {
   const { app, close } = createApp({
     bookDir,
     sampleDir: join(repoRoot, 'sample-book'),
-    provider: unavailableProvider,
+    provider: new ClaudeCodeProvider(),
   })
 
   process.once('SIGINT', () => void close().finally(() => process.exit(0)))

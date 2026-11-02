@@ -1,0 +1,107 @@
+import { mkdtemp, readFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
+import { afterEach, describe, expect, it } from 'vitest'
+import { ClaudeCodeProvider } from '../src/ai/claudeCode.ts'
+import { makeApp } from './helpers.ts'
+
+const FAKE = resolve(import.meta.dirname, 'fixtures', 'fake-claude.mjs')
+
+async function setup(mode = 'ok') {
+  const log = join(await mkdtemp(join(tmpdir(), 'loreloom-airoutes-')), 'log.jsonl')
+  process.env.FAKE_CLAUDE_MODE = mode
+  process.env.FAKE_CLAUDE_LOG = log
+  const provider = new ClaudeCodeProvider({ command: process.execPath, commandArgs: [FAKE] })
+  const t = await makeApp({ provider })
+  await t.req('POST', '/api/book', { sample: true })
+  const calls = async (): Promise<{ argv: string[]; stdin: string }[]> =>
+    (await readFile(log, 'utf8').catch(() => ''))
+      .split('\n')
+      .filter(Boolean)
+      .map((l) => JSON.parse(l))
+  return { ...t, calls }
+}
+
+function parseSse(text: string): { event: string; data: any }[] { // eslint-disable-line @typescript-eslint/no-explicit-any
+  return text
+    .split('\n\n')
+    .filter(Boolean)
+    .map((block) => {
+      const lines = block.split('\n')
+      return {
+        event: lines.find((l) => l.startsWith('event:'))!.slice(6).trim(),
+        data: JSON.parse(lines.find((l) => l.startsWith('data:'))!.slice(5)),
+      }
+    })
+}
+
+afterEach(() => {
+  delete process.env.FAKE_CLAUDE_MODE
+  delete process.env.FAKE_CLAUDE_LOG
+})
+
+describe('/api/ai', () => {
+  it('streams a brainstorm run and remembers the session', async () => {
+    const { req, bookDir, calls } = await setup()
+    const res = await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'Ideas?' })
+    expect(res.status).toBe(200)
+    const events = parseSse(await res.text()).map((e) => e.data)
+    expect(events.map((e) => e.type)).toEqual(['start', 'session', 'activity', 'text', 'text', 'done'])
+    expect(typeof events[0].requestId).toBe('string')
+    const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8'))
+    expect(stored.brainstorm).toBe('s1')
+
+    const [first] = await calls()
+    expect(first!.stdin).toContain('\n\n## Request\nIdeas?')
+    expect(first!.argv).not.toContain('--resume')
+
+    await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'More' })).text()
+    const second = (await calls())[1]!
+    expect(second.argv.slice(second.argv.indexOf('--resume'), second.argv.indexOf('--resume') + 2)).toEqual(['--resume', 's1'])
+    expect(second.stdin).toContain('## Request\nMore')
+
+    await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'Fresh', newConversation: true })).text()
+    expect((await calls())[2]!.argv).not.toContain('--resume')
+  })
+
+  it('does not store review sessions', async () => {
+    const { req, bookDir } = await setup()
+    await (await req('POST', '/api/ai/run', { mode: 'review', message: 'Review it' })).text()
+    const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8').catch(() => '{}'))
+    expect(stored.review).toBeUndefined()
+  })
+
+  it('DELETE session clears it', async () => {
+    const { req, bookDir } = await setup()
+    await (await req('POST', '/api/ai/run', { mode: 'draft', message: 'Write' })).text()
+    expect((await req('DELETE', '/api/ai/session/draft')).status).toBe(200)
+    const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8'))
+    expect(stored.draft).toBeUndefined()
+    expect((await req('DELETE', '/api/ai/session/review')).status).toBe(400)
+  })
+
+  it('cancel aborts a running request', async () => {
+    const { req } = await setup('slow')
+    const res = await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'go' })
+    const reader = res.body!.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    while (!buf.includes('"requestId"')) buf += dec.decode((await reader.read()).value)
+    const requestId = JSON.parse(buf.match(/data: (\{"type":"start".*\})/)![1]!).requestId
+    expect((await req('POST', '/api/ai/cancel', { requestId })).status).toBe(200)
+    let rest = ''
+    for (;;) {
+      const { done, value } = await reader.read()
+      if (done) break
+      rest += dec.decode(value)
+    }
+    expect(buf + rest).toContain('"code":"cancelled"')
+  })
+
+  it('validates input', async () => {
+    const { req } = await setup()
+    expect((await req('POST', '/api/ai/run', { mode: 'nope', message: 'x' })).status).toBe(400)
+    expect((await req('POST', '/api/ai/run', { mode: 'draft', message: '' })).status).toBe(400)
+    expect((await req('POST', '/api/ai/cancel', {})).status).toBe(400)
+  })
+})

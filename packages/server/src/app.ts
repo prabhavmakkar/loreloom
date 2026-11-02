@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { relative } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
@@ -10,11 +11,14 @@ import {
   NotABookError,
   NotFoundError,
   bookStats,
+  buildContext,
 } from '@loreloom/core'
 import type { BookChange, CardKind } from '@loreloom/core'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
-import type { AiProvider } from './ai/provider.ts'
+import { systemPromptFor } from './ai/prompts.ts'
+import type { AiEvent, AiMode, AiProvider } from './ai/provider.ts'
+import { SessionStore } from './ai/sessions.ts'
 import { localGuard } from './guard.ts'
 import { watchBook } from './watcher.ts'
 import type { BookWatcher } from './watcher.ts'
@@ -67,12 +71,20 @@ function cardKind(kind: string): CardKind {
 }
 
 const PING_MS = 25_000
+const AI_MODES: readonly AiMode[] = ['brainstorm', 'draft', 'review']
+
+function aiMode(v: unknown): AiMode {
+  if (typeof v !== 'string' || !AI_MODES.includes(v as AiMode)) throw new InvalidInputError('mode must be brainstorm, draft or review')
+  return v as AiMode
+}
 
 export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null; close(): Promise<void> } {
   let book: Book | null = null
   let watcher: BookWatcher | null = null
   const clients = new Set<(c: BookChange) => void>()
   const aborters = new Set<() => void>()
+  const runs = new Map<string, AbortController>()
+  let sessions: SessionStore | null = null
   let opening: Promise<Book | null> | null = null
 
   const becomeReady = (b: Book): Book => {
@@ -302,6 +314,69 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
 
   // ---- AI ----
   app.get('/api/ai/status', async (c) => c.json(await opts.provider.status()))
+
+  app.post('/api/ai/run', async (c) => {
+    const b = await needBook()
+    const body = await readObject(c.req)
+    const mode = aiMode(body.mode)
+    const message = requireString(body, 'message')
+    if (body.chapterId !== undefined && typeof body.chapterId !== 'string') throw new InvalidInputError('chapterId must be a string')
+    if (body.selection !== undefined && typeof body.selection !== 'string') throw new InvalidInputError('selection must be a string')
+    const store = (sessions ??= new SessionStore(b.dir))
+    if (body.newConversation === true) await store.clear(mode)
+    const resumeSessionId = body.newConversation === true ? undefined : await store.get(mode)
+    const context = await buildContext(b, {
+      ...(body.chapterId !== undefined ? { chapterId: body.chapterId } : {}),
+      ...(body.selection !== undefined ? { selection: body.selection } : {}),
+    })
+    const requestId = randomUUID()
+    const ac = new AbortController()
+    runs.set(requestId, ac)
+    const stopRun = () => ac.abort()
+    aborters.add(stopRun)
+
+    return streamSSE(c, async (stream) => {
+      stream.onAbort(stopRun)
+      const send = (ev: AiEvent) => stream.writeSSE({ event: 'ai', data: JSON.stringify(ev) })
+      try {
+        await send({ type: 'start', requestId })
+        for await (const ev of opts.provider.run(
+          {
+            mode,
+            systemPrompt: systemPromptFor(mode, b.meta),
+            prompt: `${context}\n\n## Request\n${message}`,
+            cwd: b.dir,
+            ...(resumeSessionId ? { resumeSessionId } : {}),
+          },
+          ac.signal,
+        )) {
+          if (ev.type === 'session') await store.set(mode, ev.sessionId)
+          await send(ev)
+        }
+      } catch (err) {
+        console.error(err)
+        await send({ type: 'error', code: 'failed', message: 'The helper stopped unexpectedly.' }).catch(() => {})
+      } finally {
+        runs.delete(requestId)
+        aborters.delete(stopRun)
+      }
+    })
+  })
+
+  app.post('/api/ai/cancel', async (c) => {
+    const { requestId } = await readObject(c.req)
+    if (typeof requestId !== 'string' || requestId === '') throw new InvalidInputError('requestId must be a string')
+    runs.get(requestId)?.abort()
+    return c.json({ ok: true })
+  })
+
+  app.delete('/api/ai/session/:mode', async (c) => {
+    const b = await needBook()
+    const mode = aiMode(c.req.param('mode'))
+    if (mode === 'review') throw new InvalidInputError('review has no stored session')
+    await (sessions ??= new SessionStore(b.dir)).clear(mode)
+    return c.json({ ok: true })
+  })
 
   // ---- unknown API routes never fall through to the SPA ----
   app.all('/api/*', (c) => c.json({ error: 'not_found' }, 404))
