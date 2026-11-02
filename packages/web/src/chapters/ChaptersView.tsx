@@ -2,7 +2,7 @@ import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, us
 import type { DragEndEvent } from '@dnd-kit/core'
 import { rectSortingStrategy, SortableContext, sortableKeyboardCoordinates, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { FormEvent } from 'react'
 import * as api from '../api.ts'
 import type { ChapterSummary } from '../api.ts'
@@ -109,12 +109,38 @@ export function ChaptersView() {
     await refresh()
   }
 
+  // One reorder request at a time; whatever was dropped last is sent once the previous one is done.
+  const pendingOrder = useRef<string[] | null>(null)
+  const sending = useRef(false)
+  const sendOrder = async () => {
+    if (sending.current) return
+    sending.current = true
+    setError(null)
+    try {
+      while (pendingOrder.current) {
+        const ids = pendingOrder.current
+        pendingOrder.current = null
+        try {
+          await api.reorderChapters(ids)
+        } catch {
+          pendingOrder.current = null
+          setError('That did not work. Is Loreloom still running?')
+          break
+        }
+      }
+    } finally {
+      sending.current = false
+      await refresh()
+    }
+  }
+
   const onDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over) return
     const next = moveId(order, String(active.id), String(over.id))
     if (next === order) return
     setOrder(next)
-    void run(() => api.reorderChapters(next))
+    pendingOrder.current = next
+    void sendOrder()
   }
 
   const add = (e: FormEvent) => {

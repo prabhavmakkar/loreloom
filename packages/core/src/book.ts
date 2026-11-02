@@ -59,6 +59,8 @@ export class Book {
   readonly dir: string
   meta: BookMeta
   private readonly written = new Map<string, string>()
+  /** Chapter read-modify-write operations run one at a time, so none overwrites another's changes. */
+  private chapterLock: Promise<unknown> = Promise.resolve()
 
   private constructor(dir: string, meta: BookMeta) {
     this.dir = dir
@@ -177,7 +179,17 @@ export class Book {
     return this.writeChapter({ id, title: input.title, order, status: 'idea', summary: '', body: '' })
   }
 
-  async saveChapter(id: string, patch: ChapterPatch, baseVersion?: string): Promise<Chapter> {
+  private serialChapters<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.chapterLock.then(op, op)
+    this.chapterLock = run.catch(() => undefined)
+    return run
+  }
+
+  saveChapter(id: string, patch: ChapterPatch, baseVersion?: string): Promise<Chapter> {
+    return this.serialChapters(() => this.saveChapterNow(id, patch, baseVersion))
+  }
+
+  private async saveChapterNow(id: string, patch: ChapterPatch, baseVersion?: string): Promise<Chapter> {
     const current = await this.getChapter(id)
     if (baseVersion !== undefined && baseVersion !== current.version) {
       throw new ConflictError(`Chapter ${id} changed on disk`, current)
@@ -191,7 +203,11 @@ export class Book {
     await this.trash(this.chapterPath(id), `${id}.md`)
   }
 
-  async reorderChapters(ids: string[]): Promise<Chapter[]> {
+  reorderChapters(ids: string[]): Promise<Chapter[]> {
+    return this.serialChapters(() => this.reorderChaptersNow(ids))
+  }
+
+  private async reorderChaptersNow(ids: string[]): Promise<Chapter[]> {
     const chapters = await this.listChapters()
     const have = new Set(chapters.map((c) => c.id))
     const want = new Set(ids)
@@ -201,8 +217,14 @@ export class Book {
     const byId = new Map(chapters.map((c) => [c.id, c]))
     const out: Chapter[] = []
     for (const [i, id] of ids.entries()) {
-      const { version: _v, ...rest } = byId.get(id)!
-      out.push(rest.order === i + 1 ? byId.get(id)! : await this.writeChapter({ ...rest, order: i + 1 }))
+      if (byId.get(id)!.order === i + 1) {
+        out.push(byId.get(id)!)
+        continue
+      }
+      // Re-read right before writing, so a change made since the snapshot is kept.
+      const fresh = await this.getChapter(id)
+      const { version: _v, ...rest } = fresh
+      out.push(fresh.order === i + 1 ? fresh : await this.writeChapter({ ...rest, order: i + 1 }))
     }
     return out
   }

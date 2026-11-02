@@ -183,3 +183,21 @@ test('saveCard ignores id/kind and validates types', async () => {
     await expect(book.saveCard('place', 'gate', bad as any)).rejects.toBeInstanceOf(InvalidInputError)
   }
 })
+
+test('concurrent reorderChapters end consistent, matching the last call', async () => {
+  const [a, b, c, d] = [await book.createChapter({ title: 'A' }), await book.createChapter({ title: 'B' }), await book.createChapter({ title: 'C' }), await book.createChapter({ title: 'D' })]
+  const calls = [[d, c, b, a], [b, a, d, c], [c, d, a, b], [a, c, b, d]].map((o) => book.reorderChapters(o.map((x) => x.id)))
+  await Promise.all(calls)
+  const list = await book.listChapters()
+  expect(list.map((x) => x.order)).toEqual([1, 2, 3, 4])
+  expect(list.map((x) => x.id)).toEqual([a, c, b, d].map((x) => x.id))
+})
+
+test('a body saved while a reorder runs survives it', async () => {
+  const a = await book.createChapter({ title: 'A' })
+  const b = await book.createChapter({ title: 'B' })
+  await Promise.all([book.reorderChapters([b.id, a.id]), book.saveChapter(a.id, { body: 'kept text' })])
+  const got = await book.getChapter(a.id)
+  expect(got.body).toBe('kept text')
+  expect(got.order).toBe(2)
+})

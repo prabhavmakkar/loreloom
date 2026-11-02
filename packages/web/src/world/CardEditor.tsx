@@ -222,6 +222,7 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
   const [loadError, setLoadError] = useState(false)
   const [theirs, setTheirs] = useState<Card | null>(null)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const [deleteError, setDeleteError] = useState(false)
   const [loadTick, setLoadTick] = useState(0)
 
   const baseRef = useRef('') // the on-disk version our next save builds on
@@ -388,14 +389,16 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
 
   const remove = async () => {
     setConfirmDelete(false)
-    goneRef.current = true
-    queueRef.current?.discard() // nothing left to save to a card that is going away
+    setDeleteError(false)
     try {
       await api.deleteCard(kind, id)
     } catch {
-      goneRef.current = false
+      // Nothing was deleted: the queue and the stored draft stay as they were.
+      setDeleteError(true)
       return
     }
+    goneRef.current = true
+    queueRef.current?.discard() // nothing left to save to a card that is gone
     await refresh()
     onGoneRef.current()
   }
@@ -462,6 +465,11 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
         <button type="button" className="ghost danger-text" onClick={() => setConfirmDelete(true)}>
           Delete {KIND_LABEL[kind].toLowerCase()}
         </button>
+        {deleteError && (
+          <p className="form-error" role="alert">
+            Could not delete. Your edits are kept.
+          </p>
+        )}
       </div>
       {confirmDelete && (
         <ConfirmDialog
