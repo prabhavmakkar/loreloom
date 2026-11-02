@@ -134,4 +134,17 @@ describe('/api/ai', () => {
     expect((await req('POST', '/api/ai/run', { mode: 'draft', message: '' })).status).toBe(400)
     expect((await req('POST', '/api/ai/cancel', {})).status).toBe(400)
   })
+
+  it('turns a review reply into suggestion events, never raw text', async () => {
+    const { req, calls } = await setup('review')
+    const res = await req('POST', '/api/ai/run', { mode: 'review', message: 'Review', chapterId: 'x' })
+    const events = parseSse(await res.text()).map((e) => e.data)
+    expect(events.some((e) => e.type === 'text')).toBe(false)
+    expect(events.filter((e) => e.type === 'suggestion').map((e) => [e.suggestion.id, e.suggestion.category, e.suggestion.fix])).toEqual([
+      ['r1', 'continuity', 'Kael picked the lock.'],
+      ['r2', 'prose', ''],
+    ])
+    expect(events.at(-1).type).toBe('done')
+    expect((await calls())[0]!.argv).toContain('--no-session-persistence')
+  })
 })

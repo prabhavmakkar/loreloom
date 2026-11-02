@@ -16,7 +16,8 @@ import type { BookChange, CardKind } from '@loreloom/core'
 import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { systemPromptFor } from './ai/prompts.ts'
-import type { AiEvent, AiMode, AiProvider } from './ai/provider.ts'
+import type { AiEvent, AiMode, AiProvider, ReviewSuggestion } from './ai/provider.ts'
+import { createReviewParser } from './ai/review.ts'
 import { SessionStore } from './ai/sessions.ts'
 import { localGuard } from './guard.ts'
 import { watchBook } from './watcher.ts'
@@ -337,6 +338,11 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
     return streamSSE(c, async (stream) => {
       stream.onAbort(stopRun)
       const send = (ev: AiEvent) => stream.writeSSE({ event: 'ai', data: JSON.stringify(ev) })
+      // Review replies are NDJSON: turn them into suggestion events instead of streaming raw text.
+      const review = mode === 'review' ? createReviewParser() : null
+      const sendSuggestions = async (list: ReviewSuggestion[]) => {
+        for (const suggestion of list) await send({ type: 'suggestion', suggestion })
+      }
       try {
         await send({ type: 'start', requestId })
         for await (const ev of opts.provider.run(
@@ -350,6 +356,11 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
           ac.signal,
         )) {
           if (ev.type === 'session') await store.set(mode, ev.sessionId)
+          if (review && ev.type === 'text') {
+            await sendSuggestions(review.push(ev.text))
+            continue
+          }
+          if (review && (ev.type === 'done' || ev.type === 'error')) await sendSuggestions(review.end())
           await send(ev)
         }
       } catch (err) {

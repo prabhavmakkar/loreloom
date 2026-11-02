@@ -7,6 +7,7 @@ import { useBook } from '../state/BookContext.tsx'
 import { BrainstormTab } from './BrainstormTab.tsx'
 import { DraftTab } from './DraftTab.tsx'
 import { NOT_INSTALLED, NOT_LOGGED_IN } from './parts.tsx'
+import { ReviewTab } from './ReviewTab.tsx'
 
 const TABS = ['Brainstorm', 'Draft', 'Review'] as const
 type Tab = (typeof TABS)[number]
@@ -58,7 +59,7 @@ export function HelperPanel({ editor }: { editor: RefObject<EditorHandle | null>
         <DraftTab chapterId={currentChapterId} editor={editor} />
       </div>
       <div role="tabpanel" id="helper-pane-Review" aria-labelledby="helper-tab-Review" hidden={tab !== 'Review'}>
-        <p className="muted hint pad">Review is coming soon.</p>
+        <ReviewTab chapterId={currentChapterId} editor={editor} />
       </div>
     </div>
   )

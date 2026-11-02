@@ -1,8 +1,8 @@
 // Types only: importing values from core or the server would drag Node `fs` into the bundle.
 import type { Book, BookChange, BookStats, Card, CardKind, Chapter, Relationship } from '@loreloom/core'
-import type { AiErrorCode, AiEvent, AiMode, AiStatus } from '../../server/src/ai/provider.ts'
+import type { AiErrorCode, AiEvent, AiMode, AiStatus, ReviewCategory, ReviewSuggestion } from '../../server/src/ai/provider.ts'
 
-export type { AiErrorCode, AiEvent, AiMode, AiStatus, BookChange, BookStats, Card, CardKind, Chapter, Relationship }
+export type { AiErrorCode, AiEvent, AiMode, AiStatus, ReviewCategory, ReviewSuggestion, BookChange, BookStats, Card, CardKind, Chapter, Relationship }
 
 export type BookMeta = Book['meta']
 export type ChapterSummary = Omit<Chapter, 'body'>

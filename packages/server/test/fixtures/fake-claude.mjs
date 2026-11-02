@@ -29,6 +29,14 @@ process.stdin.on('end', () => {
     out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude usage limit reached', session_id: 's1' })
     process.exit(0)
   }
+  if (mode === 'review') {
+    const line = (o) => `${JSON.stringify(o)}\n`
+    const first = line({ quote: 'Kael melted the lock.', issue: 'Iron repels ember-magic', fix: 'Kael picked the lock.', category: 'continuity' })
+    delta('Notes:\n```json\n' + first.slice(0, 30))
+    delta(first.slice(30) + line({ quote: 'He ran.', issue: 'Flat', fix: '', category: 'prose' }).trimEnd())
+    out({ type: 'result', subtype: 'success', is_error: false, result: 'x', session_id: 's1' })
+    return
+  }
   if (mode === 'slow') {
     setInterval(() => delta('tick '), 200)
     return

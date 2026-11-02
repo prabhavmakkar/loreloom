@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { cancelAi, streamAi } from '../api.ts'
-import type { AiErrorCode, AiRunBody } from '../api.ts'
+import type { AiErrorCode, AiRunBody, ReviewSuggestion } from '../api.ts'
 
 export type RunState = 'idle' | 'running' | 'error'
 export interface RunError {
@@ -22,6 +22,7 @@ export function useAiRun() {
   const [state, setState] = useState<RunState>('idle')
   const [text, setText] = useState('')
   const [activity, setActivity] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<ReviewSuggestion[]>([])
   const [error, setError] = useState<RunError | undefined>()
   const live = useRef<{ ac: AbortController; requestId?: string } | null>(null)
 
@@ -44,6 +45,7 @@ export function useAiRun() {
       setState('running')
       setText('')
       setActivity([])
+      setSuggestions([])
       setError(undefined)
       try {
         await streamAi(
@@ -54,7 +56,8 @@ export function useAiRun() {
             else if (ev.type === 'text') {
               acc += ev.text
               setText(acc)
-            } else if (ev.type === 'activity') setActivity((a) => [...a, ev.text])
+            } else if (ev.type === 'suggestion') setSuggestions((l) => [...l, ev.suggestion])
+            else if (ev.type === 'activity') setActivity((a) => [...a, ev.text])
             else if (ev.type === 'error' && ev.code !== 'cancelled') failed = { code: ev.code, message: ev.message }
           },
           me.ac.signal,
@@ -84,10 +87,11 @@ export function useAiRun() {
     setState('idle')
     setText('')
     setActivity([])
+    setSuggestions([])
     setError(undefined)
   }, [stop])
 
   useEffect(() => stop, [stop])
 
-  return { run, cancel, reset, state, text, activity, error }
+  return { run, cancel, reset, state, text, activity, suggestions, error }
 }
