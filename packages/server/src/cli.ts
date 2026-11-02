@@ -58,6 +58,7 @@ async function main(): Promise<void> {
     bookDir,
     sampleDir: join(repoRoot, 'sample-book'),
     provider: new ClaudeCodeProvider(),
+    staticDir: join(repoRoot, 'packages', 'web', 'dist'),
   })
 
   process.once('SIGINT', () => void close().finally(() => process.exit(0)))

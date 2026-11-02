@@ -1,5 +1,4 @@
 import { randomUUID } from 'node:crypto'
-import { relative } from 'node:path'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
   Book,
@@ -383,7 +382,7 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
 
   // ---- static files (production build) ----
   if (opts.staticDir) {
-    const root = relative(process.cwd(), opts.staticDir) || '.'
+    const root = opts.staticDir // absolute path: serveStatic joins it as-is, independent of cwd
     app.use('*', serveStatic({ root }))
     app.get('*', serveStatic({ root, path: 'index.html' }))
   }
