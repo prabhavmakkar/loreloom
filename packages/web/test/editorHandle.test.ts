@@ -24,6 +24,20 @@ describe('EditorHandle', () => {
     expect(handle.getPlainText()).toBe('First line here.\n\n"It knows you," Mira said, quietly.')
   })
 
+  it('getTextBeforeCursor returns the plain text up to the cursor, or the selection end', () => {
+    const { editor, handle } = setup(MD)
+    const text = handle.getPlainText()
+    const at = text.indexOf('said')
+    const pos = editor.state.doc.content.size
+    editor.commands.setTextSelection(1 + 'First line'.length)
+    expect(handle.getTextBeforeCursor()).toBe('First line')
+    editor.commands.setTextSelection({ from: 1, to: 1 + 'First line'.length })
+    expect(handle.getTextBeforeCursor()).toBe('First line')
+    editor.commands.setTextSelection(pos - 1)
+    expect(at).toBeGreaterThan(0)
+    expect(handle.getTextBeforeCursor()).toBe(text)
+  })
+
   it('replaceRange uses plain-text offsets and keeps the rest of the Markdown intact', () => {
     const { editor, handle } = setup(MD)
     const text = handle.getPlainText()

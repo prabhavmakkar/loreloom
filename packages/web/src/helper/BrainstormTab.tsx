@@ -19,6 +19,7 @@ export function BrainstormTab({ bookKey, chapterId, editor }: { bookKey: string;
   const [input, setInput] = useState('')
   const { run, cancel, state, text, activity, error } = useAiRun()
   const lastBody = useRef<AiRunBody | null>(null)
+  const generation = useRef(0) // bumped by New conversation so a late reply cannot restore the old transcript
   const running = state === 'running'
 
   const remember = (next: Message[]) => {
@@ -31,6 +32,7 @@ export function BrainstormTab({ bookKey, chapterId, editor }: { bookKey: string;
 
   const send = async (message: string, base: Message[], extra: Partial<AiRunBody> = {}) => {
     const selection = editor.current?.getSelectionText() ?? ''
+    const gen = generation.current
     const body: AiRunBody = {
       mode: 'brainstorm',
       message,
@@ -40,7 +42,7 @@ export function BrainstormTab({ bookKey, chapterId, editor }: { bookKey: string;
     }
     lastBody.current = body
     const result = await run(body)
-    if (result.text.trim()) remember([...base, { role: 'helper', text: result.text }])
+    if (gen === generation.current && result.text.trim()) remember([...base, { role: 'helper', text: result.text }])
   }
 
   const submit = () => {
@@ -59,6 +61,7 @@ export function BrainstormTab({ bookKey, chapterId, editor }: { bookKey: string;
   }
 
   const newConversation = () => {
+    generation.current++
     cancel()
     transcripts.delete(bookKey)
     setMessages([])

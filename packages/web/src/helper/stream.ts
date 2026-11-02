@@ -78,7 +78,16 @@ export function useAiRun() {
     setState('idle')
   }, [stop])
 
+  /** Stops any run and clears the output, e.g. when the chapter it was written for changes. */
+  const reset = useCallback(() => {
+    stop()
+    setState('idle')
+    setText('')
+    setActivity([])
+    setError(undefined)
+  }, [stop])
+
   useEffect(() => stop, [stop])
 
-  return { run, cancel, state, text, activity, error }
+  return { run, cancel, reset, state, text, activity, error }
 }

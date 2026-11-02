@@ -16,6 +16,8 @@ export interface EditorHandle {
   highlightRange(from: number, to: number): void
   replaceRange(from: number, to: number, text: string): void
   getPlainText(): string
+  /** Plain text from the start of the chapter to the cursor (to the end of the selection, if any). */
+  getTextBeforeCursor(): string
 }
 
 interface Segment {
@@ -153,6 +155,10 @@ export function createEditorHandle(getEditor: () => Editor | null): EditorHandle
       const ed = get()
       if (!ed) return
       ed.chain().focus().insertContentAt(range(ed, from, to), toContent(text)).run()
+    },
+    getTextBeforeCursor() {
+      const ed = read()
+      return ed ? ed.state.doc.textBetween(0, ed.state.selection.to, BLOCK_SEP, leafText) : ''
     },
     getPlainText() {
       const ed = read()

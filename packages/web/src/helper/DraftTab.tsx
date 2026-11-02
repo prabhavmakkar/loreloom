@@ -16,7 +16,7 @@ export function DraftTab({ chapterId, editor }: { chapterId: string | null; edit
   const [instruction, setInstruction] = useState('')
   const [hasSelection, setHasSelection] = useState(false)
   const [copied, setCopied] = useState(false)
-  const { run, cancel, state, text, activity, error } = useAiRun()
+  const { run, cancel, reset, state, text, activity, error } = useAiRun()
   const last = useRef<AiRunBody | null>(null)
   const running = state === 'running'
   const canEdit = useBook().view === 'write' // the chapter editor is only mounted in the write view
@@ -30,18 +30,16 @@ export function DraftTab({ chapterId, editor }: { chapterId: string | null; edit
   useEffect(() => {
     if (!running) checkSelection()
   }, [running, checkSelection])
-  // The reply was written for one chapter: switching away stops it.
-  useEffect(() => cancel, [chapterId, cancel])
+  // The reply was written for one chapter: switching away stops it and drops the draft.
+  useEffect(() => reset, [chapterId, reset])
 
   const start = (message: string, withContext: boolean) => {
     const selection = editor.current?.getSelectionText() ?? ''
     let full = message
     if (withContext) {
-      if (selection) full += `\n\nPick up directly after this passage:\n${selection}`
-      else {
-        const tail = (editor.current?.getPlainText() ?? '').slice(-TAIL_CHARS).trim()
-        if (tail) full += `\n\nThe text before the cursor ends:\n${tail}`
-      }
+      // Continue from the cursor (or from the end of the selection), not from the end of the chapter.
+      const before = (editor.current?.getTextBeforeCursor() ?? '').slice(-TAIL_CHARS).trim()
+      if (before) full += `\n\nThe text before the cursor ends:\n${before}`
     }
     const body: AiRunBody = { mode: 'draft', message: full, ...(chapterId ? { chapterId } : {}), ...(selection ? { selection } : {}) }
     last.current = body
@@ -87,7 +85,7 @@ export function DraftTab({ chapterId, editor }: { chapterId: string | null; edit
           <button type="button" className="small" onClick={() => start(CONTINUE_MESSAGE, true)} disabled={running}>
             Continue from cursor
           </button>
-          <button type="button" className="small" onClick={() => start(NEXT_SCENE_MESSAGE, true)} disabled={running}>
+          <button type="button" className="small" onClick={() => start(NEXT_SCENE_MESSAGE, false)} disabled={running}>
             Draft the next scene
           </button>
           {running && (
