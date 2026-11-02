@@ -48,8 +48,10 @@ describe('request errors', () => {
 describe('subscribeChanges', () => {
   class FakeEventSource {
     static last: FakeEventSource
+    static CLOSED = 2
     listeners = new Map<string, ((e: MessageEvent<string>) => void)[]>()
     closed = false
+    readyState = 1
     constructor(public url: string) {
       FakeEventSource.last = this
     }
@@ -78,5 +80,72 @@ describe('subscribeChanges', () => {
     expect(onReconnect).toHaveBeenCalledTimes(1)
     stop()
     expect(es.closed).toBe(true)
+  })
+
+  // Behind a proxy (vite dev), a down server answers 502 and the browser closes the
+  // EventSource for good instead of retrying; changes would then go unnoticed.
+  it('reconnects itself when the browser gives up on the stream', () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('EventSource', FakeEventSource)
+      const onChange = vi.fn()
+      const onReconnect = vi.fn()
+      const stop = subscribeChanges(onChange, onReconnect)
+      const first = FakeEventSource.last
+      first.emit('ready')
+      first.readyState = FakeEventSource.CLOSED
+      first.emit('error')
+      vi.advanceTimersByTime(5000)
+      const second = FakeEventSource.last
+      expect(second).not.toBe(first)
+      expect(first.closed).toBe(true)
+      second.emit('ready')
+      expect(onReconnect).toHaveBeenCalledTimes(1)
+      second.emit('change', '{"type":"chapter","id":"b"}')
+      expect(onChange).toHaveBeenCalledWith({ type: 'chapter', id: 'b' })
+
+      // a transient error the browser retries itself is left alone
+      second.emit('error')
+      vi.advanceTimersByTime(5000)
+      expect(FakeEventSource.last).toBe(second)
+
+      // stopping cancels a pending reconnect
+      second.readyState = FakeEventSource.CLOSED
+      second.emit('error')
+      stop()
+      vi.advanceTimersByTime(5000)
+      expect(FakeEventSource.last).toBe(second)
+      expect(second.closed).toBe(true)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // A proxy can also leave the browser's side of a dead stream open, with no error at all.
+  // The server pings every 25 s, so 60 s of silence means the stream is stale.
+  it('reconnects a stream that has gone silent, and pings keep it alive', () => {
+    vi.useFakeTimers()
+    try {
+      vi.stubGlobal('EventSource', FakeEventSource)
+      const onReconnect = vi.fn()
+      const stop = subscribeChanges(() => {}, onReconnect)
+      const first = FakeEventSource.last
+      first.emit('ready')
+      vi.advanceTimersByTime(50_000)
+      first.emit('ping', '')
+      vi.advanceTimersByTime(50_000)
+      expect(FakeEventSource.last).toBe(first)
+      vi.advanceTimersByTime(10_001)
+      const second = FakeEventSource.last
+      expect(second).not.toBe(first)
+      expect(first.closed).toBe(true)
+      second.emit('ready')
+      expect(onReconnect).toHaveBeenCalledTimes(1)
+      stop()
+      vi.advanceTimersByTime(120_000)
+      expect(FakeEventSource.last).toBe(second)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })

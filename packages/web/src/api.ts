@@ -140,24 +140,59 @@ export async function streamAi(body: AiRunBody, onEvent: (ev: AiEvent) => void, 
   feed(decoder.decode())
 }
 
+const SILENT_MS = 60_000
+
 /**
  * Subscribes to on-disk changes. Returns an unsubscribe function.
  * The browser reconnects silently after a drop; changes made meanwhile are never
  * delivered, so `onReconnect` fires on every `ready` after the first.
  */
 export function subscribeChanges(onChange: (c: BookChange) => void, onReconnect?: () => void): () => void {
-  const es = new EventSource('/api/events')
   let seenReady = false
-  es.addEventListener('ready', () => {
-    if (seenReady) onReconnect?.()
-    seenReady = true
-  })
-  es.addEventListener('change', (e) => {
-    try {
-      onChange(JSON.parse((e as MessageEvent<string>).data) as BookChange)
-    } catch {
-      // ignore a malformed frame
-    }
-  })
-  return () => es.close()
+  let stopped = false
+  let es: EventSource
+  let timer: ReturnType<typeof setTimeout> | undefined
+  let watchdog: ReturnType<typeof setTimeout> | undefined
+  const reconnect = (delay: number) => {
+    clearTimeout(watchdog)
+    es.close()
+    timer = setTimeout(connect, delay)
+  }
+  // The server pings every 25 s; silence for longer means a stale stream (a proxy can keep
+  // the browser's side open after the server is gone, with no error at all).
+  const alive = () => {
+    clearTimeout(watchdog)
+    watchdog = setTimeout(() => reconnect(0), SILENT_MS)
+  }
+  const connect = () => {
+    if (stopped) return
+    es = new EventSource('/api/events')
+    alive()
+    es.addEventListener('ready', () => {
+      alive()
+      if (seenReady) onReconnect?.()
+      seenReady = true
+    })
+    es.addEventListener('ping', alive)
+    es.addEventListener('change', (e) => {
+      alive()
+      try {
+        onChange(JSON.parse((e as MessageEvent<string>).data) as BookChange)
+      } catch {
+        // ignore a malformed frame
+      }
+    })
+    // An HTTP error (e.g. a 502 from the dev proxy while the server is down) makes the
+    // browser give up for good; reconnect ourselves. Network errors it retries on its own.
+    es.addEventListener('error', () => {
+      if (!stopped && es.readyState === EventSource.CLOSED) reconnect(3000)
+    })
+  }
+  connect()
+  return () => {
+    stopped = true
+    clearTimeout(timer)
+    clearTimeout(watchdog)
+    es.close()
+  }
 }
