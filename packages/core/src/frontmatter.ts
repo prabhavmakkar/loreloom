@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { parse, stringify } from 'yaml'
 
-const FM_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/
+const FM_RE = /^---\r?\n(?:([\s\S]*?)\r?\n)?---\r?\n?([\s\S]*)$/
 
 export function parseDoc(text: string): { data: Record<string, unknown>; body: string } {
   const m = FM_RE.exec(text)
@@ -12,7 +12,7 @@ export function parseDoc(text: string): { data: Record<string, unknown>; body: s
 }
 
 export function stringifyDoc(data: Record<string, unknown>, body: string): string {
-  return `---\n${stringify(data).trimEnd()}\n---\n${body}`
+  return `---\n${stringify(data, { lineWidth: 0 }).trimEnd()}\n---\n${body}`
 }
 
 export function contentVersion(text: string): string {
