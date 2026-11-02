@@ -153,3 +153,33 @@ test('createFromSample copies the sample book', async () => {
   expect((await b.getCard('rule', 'iron-and-ember')).name).toMatch(/iron/i)
   await expect(Book.createFromSample(target, SAMPLE)).rejects.toBeInstanceOf(BookExistsError)
 })
+
+test('saveChapter ignores non-whitelisted keys and rejects bad types', async () => {
+  const c = await book.createChapter({ title: 'One' })
+  const out = await book.saveChapter(c.id, { id: '../evil', order: 99, version: 'x', body: 'x' } as any)
+  expect([out.id, out.order, out.body]).toEqual(['one', 1, 'x'])
+  expect(await readdir(dir)).not.toContain('evil.md')
+  expect(await readdir(join(dir, 'chapters'))).toEqual(['one.md'])
+  for (const bad of [{ body: null }, { title: 5 }, { summary: {} }, { status: 'nope' }]) {
+    await expect(book.saveChapter(c.id, bad as any)).rejects.toBeInstanceOf(InvalidInputError)
+  }
+})
+
+test('saveCard ignores id/kind and validates types', async () => {
+  await book.createCard('place', { name: 'Gate' })
+  const out = await book.saveCard('place', 'gate', { id: '../../x', kind: 'rule', summary: 's' } as any)
+  expect([out.id, out.kind, out.summary]).toEqual(['gate', 'place', 's'])
+  expect(await readdir(join(dir, 'world', 'places'))).toEqual(['gate.md'])
+  for (const bad of [
+    { name: 1 },
+    { aliases: 'a' },
+    { aliases: [1] },
+    { relationships: [{ to: 'x' }] },
+    { relationships: 'no' },
+    { fields: [] },
+    { fields: null },
+    { body: null },
+  ]) {
+    await expect(book.saveCard('place', 'gate', bad as any)).rejects.toBeInstanceOf(InvalidInputError)
+  }
+})

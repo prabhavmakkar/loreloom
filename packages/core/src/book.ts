@@ -182,11 +182,8 @@ export class Book {
     if (baseVersion !== undefined && baseVersion !== current.version) {
       throw new ConflictError(`Chapter ${id} changed on disk`, current)
     }
-    if (patch.status !== undefined && !STATUSES.includes(patch.status)) {
-      throw new InvalidInputError(`Invalid status: ${patch.status}`)
-    }
     const { version: _v, ...rest } = current
-    return this.writeChapter({ ...rest, ...definedOnly(patch) })
+    return this.writeChapter({ ...rest, ...pickChapterPatch(patch) })
   }
 
   async deleteChapter(id: string): Promise<void> {
@@ -307,7 +304,7 @@ export class Book {
       throw new ConflictError(`${kind} ${id} changed on disk`, current)
     }
     const { version: _v, ...rest } = current
-    return this.writeCard({ ...rest, ...definedOnly(patch) })
+    return this.writeCard({ ...rest, ...pickCardPatch(patch) })
   }
 
   async deleteCard(kind: CardKind, id: string): Promise<void> {
@@ -338,6 +335,58 @@ export class Book {
   }
 }
 
-function definedOnly<T extends object>(o: T): Partial<T> {
-  return Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined)) as Partial<T>
+function str(patch: Record<string, unknown>, key: string, out: Record<string, unknown>): void {
+  const v = patch[key]
+  if (v === undefined) return
+  if (typeof v !== 'string') throw new InvalidInputError(`${key} must be a string`)
+  out[key] = v
+}
+
+function pickChapterPatch(patch: ChapterPatch): ChapterPatch {
+  const p = patch as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of ['title', 'body', 'summary']) str(p, k, out)
+  if (p.status !== undefined) {
+    if (!STATUSES.includes(p.status as ChapterStatus)) throw new InvalidInputError(`Invalid status: ${String(p.status)}`)
+    out.status = p.status
+  }
+  return out as ChapterPatch
+}
+
+function pickCardPatch(patch: CardPatch): CardPatch {
+  const p = patch as Record<string, unknown>
+  const out: Record<string, unknown> = {}
+  for (const k of ['name', 'summary', 'body']) str(p, k, out)
+  if (p.aliases !== undefined) {
+    if (!Array.isArray(p.aliases) || !p.aliases.every((a) => typeof a === 'string')) {
+      throw new InvalidInputError('aliases must be an array of strings')
+    }
+    out.aliases = [...p.aliases]
+  }
+  if (p.relationships !== undefined) {
+    const ok =
+      Array.isArray(p.relationships) &&
+      p.relationships.every(
+        (r) =>
+          r !== null &&
+          typeof r === 'object' &&
+          typeof r.to === 'string' &&
+          typeof r.kind === 'string' &&
+          (r.note === undefined || typeof r.note === 'string'),
+      )
+    if (!ok) throw new InvalidInputError('relationships must be an array of {to, kind, note?} strings')
+    out.relationships = (p.relationships as Relationship[]).map((r) => {
+      const rel: Relationship = { to: r.to, kind: r.kind }
+      if (r.note !== undefined) rel.note = r.note
+      return rel
+    })
+  }
+  if (p.fields !== undefined) {
+    const f = p.fields
+    if (f === null || typeof f !== 'object' || Array.isArray(f) || Object.getPrototypeOf(f) !== Object.prototype) {
+      throw new InvalidInputError('fields must be a plain object')
+    }
+    out.fields = f
+  }
+  return out as CardPatch
 }
