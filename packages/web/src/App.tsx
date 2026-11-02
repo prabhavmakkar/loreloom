@@ -2,6 +2,7 @@ import { useRef, useState } from 'react'
 import { ChaptersView } from './chapters/ChaptersView.tsx'
 import { Editor } from './editor/Editor.tsx'
 import type { EditorHandle, SaveState } from './editor/Editor.tsx'
+import { HelperPanel } from './helper/HelperPanel.tsx'
 import { FirstRun } from './layout/FirstRun.tsx'
 import { Sidebar } from './layout/Sidebar.tsx'
 import { TopBar } from './layout/TopBar.tsx'
@@ -18,14 +19,11 @@ function NoChapter() {
   )
 }
 
-// Placeholders: replaced by the real components in later tasks.
-const HelperPlaceholder = () => <div className="placeholder-view">Helper tabs coming in Task 10.</div>
-
 function Shell() {
   const { loaded, error, exists, view, chapters, currentChapterId } = useBook()
   const [helperOpen, setHelperOpen] = useStored('loreloom-helper', true)
   const [save, setSave] = useState<SaveState | null>(null)
-  // For the helper (Tasks 10–11).
+  // Shared with the helper panel, which inserts text only on an explicit click.
   const editorRef = useRef<EditorHandle>(null)
 
   if (!loaded) return <div className="splash" aria-busy="true">Loreloom</div>
@@ -55,7 +53,7 @@ function Shell() {
       </main>
       {helperOpen && (
         <aside className="helper" aria-label="Helper">
-          <HelperPlaceholder />
+          <HelperPanel editor={editorRef} />
         </aside>
       )}
     </div>
