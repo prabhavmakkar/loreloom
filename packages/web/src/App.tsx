@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { ChaptersView } from './chapters/ChaptersView.tsx'
 import { Editor } from './editor/Editor.tsx'
 import type { EditorHandle, SaveState } from './editor/Editor.tsx'
 import { FirstRun } from './layout/FirstRun.tsx'
@@ -6,6 +7,7 @@ import { Sidebar } from './layout/Sidebar.tsx'
 import { TopBar } from './layout/TopBar.tsx'
 import { BookProvider, useBook } from './state/BookContext.tsx'
 import { useStored } from './useStored.ts'
+import { WorldView } from './world/WorldView.tsx'
 
 function NoChapter() {
   return (
@@ -17,8 +19,6 @@ function NoChapter() {
 }
 
 // Placeholders: replaced by the real components in later tasks.
-const WorldPlaceholder = () => <div className="placeholder-view">World view (CardEditor) coming in Task 9.</div>
-const ChaptersPlaceholder = () => <div className="placeholder-view">Chapters view coming in Task 9.</div>
 const HelperPlaceholder = () => <div className="placeholder-view">Helper tabs coming in Task 10.</div>
 
 function Shell() {
@@ -50,8 +50,8 @@ function Shell() {
           ) : (
             <NoChapter />
           ))}
-        {view === 'world' && <WorldPlaceholder />}
-        {view === 'chapters' && <ChaptersPlaceholder />}
+        {view === 'world' && <WorldView onSaveState={setSave} />}
+        {view === 'chapters' && <ChaptersView />}
       </main>
       {helperOpen && (
         <aside className="helper" aria-label="Helper">

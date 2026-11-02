@@ -9,7 +9,7 @@ const SHELVES: Record<CardKind, string> = {
 }
 
 export function Sidebar() {
-  const { chapters, stats, cards, currentChapterId, setCurrentChapterId, setView, view } = useBook()
+  const { chapters, stats, cards, currentChapterId, setCurrentChapterId, setView, view, world, setWorld } = useBook()
   const pages = new Map(stats?.perChapter.map((c) => [c.id, c.pages]))
   return (
     <nav className="sidebar" aria-label="Book">
@@ -43,7 +43,15 @@ export function Sidebar() {
       <ul>
         {CARD_KINDS.map((k) => (
           <li key={k}>
-            <button type="button" className="row" onClick={() => setView('world')}>
+            <button
+              type="button"
+              className={`row${view === 'world' && world.kind === k ? ' on' : ''}`}
+              aria-current={view === 'world' && world.kind === k ? 'true' : undefined}
+              onClick={() => {
+                setWorld({ kind: k, cardId: null })
+                setView('world')
+              }}
+            >
               <span className="name">{SHELVES[k]}</span>
               <span className="count">{cards[k].length}</span>
             </button>

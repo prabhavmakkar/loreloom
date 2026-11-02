@@ -626,3 +626,303 @@ button:disabled {
     transition: none !important;
   }
 }
+
+/* ---------- boards: shelves and chapters ---------- */
+.board,
+.card-page {
+  max-width: 62rem;
+  margin: 0 auto;
+  padding: 2.5rem 2rem 6rem;
+}
+.board-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.4rem;
+}
+.board-head h1 {
+  margin: 0;
+  font-family: var(--font-prose);
+  font-size: 1.6rem;
+  font-weight: 600;
+}
+.inline-form {
+  display: flex;
+  gap: 0.4rem;
+}
+.inline-form input,
+.rename-input {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 6px;
+  background: var(--paper-2);
+}
+button.small {
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8rem;
+}
+.danger-text {
+  color: var(--danger);
+}
+.primary.danger {
+  background: var(--danger);
+  color: var(--paper);
+}
+.form-error {
+  margin: 0.5rem 0;
+  color: var(--danger);
+  font-size: 0.85rem;
+}
+.shelf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+.shelf-list button {
+  width: 100%;
+  display: grid;
+  gap: 0.15rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-2);
+  text-align: left;
+}
+.shelf-list button:hover {
+  background: var(--paper-3);
+}
+.shelf-name {
+  font-family: var(--font-prose);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.shelf-summary {
+  color: var(--ink-2);
+  font-size: 0.84rem;
+}
+
+/* chapters grid */
+.chapter-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: 0.9rem;
+}
+.chapter-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.6rem 0.8rem 0.7rem;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--paper-2);
+}
+.chapter-card.dragging {
+  position: relative;
+  z-index: 3;
+  box-shadow: var(--shadow);
+}
+.chapter-card-top {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.drag-handle {
+  width: 1.6rem;
+  height: 1.6rem;
+  cursor: grab;
+  touch-action: none;
+}
+.chapter-num {
+  color: var(--ink-3);
+  font-variant-numeric: tabular-nums;
+}
+.chapter-pages {
+  margin-left: auto;
+  color: var(--ink-2);
+  font-size: 0.8rem;
+  font-variant-numeric: tabular-nums;
+}
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--paper-3);
+  color: var(--ink-2);
+  font-size: 0.72rem;
+}
+.chip.status-drafting {
+  background: color-mix(in srgb, var(--warn) 18%, transparent);
+  color: var(--warn);
+}
+.chip.status-revising {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+}
+.chip.status-done {
+  background: color-mix(in srgb, #4d8a4d 20%, transparent);
+  color: #4d8a4d;
+}
+.chapter-open {
+  display: grid;
+  gap: 0.25rem;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  flex: 1;
+}
+.chapter-title {
+  font-family: var(--font-prose);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+.chapter-summary {
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.chapter-card-actions {
+  display: flex;
+  gap: 0.4rem;
+}
+
+/* card editor */
+.card-editor {
+  display: grid;
+  gap: 1.1rem;
+  margin-top: 1rem;
+}
+.card-editor .banner {
+  margin: 0;
+}
+.kind-label {
+  margin: 0;
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.card-name {
+  padding: 0.2rem 0;
+  border: 0;
+  border-bottom: 1px solid var(--rule-strong);
+  background: none;
+  font-family: var(--font-prose);
+  font-size: 1.85rem;
+  font-weight: 600;
+}
+.field-group {
+  display: grid;
+  gap: 0.35rem;
+}
+.field-group > label,
+.field-label,
+.field-group > h2 {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.field-group input:not([type='checkbox']),
+.field-group select,
+.field-group textarea {
+  padding: 0.5rem 0.7rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: var(--radius);
+  background: var(--paper-2);
+  font: inherit;
+}
+.field-group textarea {
+  font-family: var(--font-prose);
+  line-height: 1.6;
+  resize: vertical;
+}
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+.chips input {
+  flex: 1;
+  min-width: 8rem;
+}
+.chip.alias button {
+  border: 0;
+  background: none;
+  padding: 0;
+  line-height: 1;
+  color: var(--ink-3);
+}
+.rel-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+.rel-list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+.rel-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+.rel-form input {
+  flex: 1;
+  min-width: 8rem;
+}
+.card-danger {
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--rule);
+}
+
+/* confirmation dialog */
+.scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  background: #0006;
+}
+.dialog {
+  width: min(26rem, calc(100vw - 2rem));
+  padding: 1.4rem 1.5rem 1.2rem;
+  border: 1px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--paper);
+  box-shadow: var(--shadow);
+}
+.dialog h2 {
+  margin: 0 0 0.5rem;
+  font-family: var(--font-prose);
+  font-size: 1.15rem;
+}
+.dialog p {
+  margin: 0 0 1.2rem;
+  color: var(--ink-2);
+}
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

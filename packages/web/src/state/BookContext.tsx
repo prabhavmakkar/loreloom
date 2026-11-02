@@ -6,6 +6,12 @@ import type { BookMeta, BookStats, Card, CardKind, ChapterSummary } from '../api
 export type View = 'write' | 'world' | 'chapters'
 export const CARD_KINDS: CardKind[] = ['character', 'place', 'rule', 'term']
 
+/** What the World view shows: a shelf's card list, or one open card. */
+export interface WorldSelection {
+  kind: CardKind | null
+  cardId: string | null
+}
+
 export interface BookState {
   /** False until the first request to the server has finished. */
   loaded: boolean
@@ -20,6 +26,8 @@ export interface BookState {
   setCurrentChapterId(id: string | null): void
   view: View
   setView(view: View): void
+  world: WorldSelection
+  setWorld(w: WorldSelection): void
   refresh(): Promise<void>
 }
 
@@ -43,6 +51,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [cards, setCards] = useState<Record<CardKind, Card[]>>(emptyCards)
   const [currentChapterId, setCurrentChapterId] = useState<string | null>(null)
   const [view, setView] = useState<View>('write')
+  const [world, setWorld] = useState<WorldSelection>({ kind: null, cardId: null })
 
   // Only the latest refresh may write state, so a slow response can't clobber a newer one.
   const seq = useRef(0)
@@ -94,8 +103,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, [chapters, loaded])
 
   const value = useMemo<BookState>(
-    () => ({ loaded, error, exists, meta, stats, chapters, cards, currentChapterId, setCurrentChapterId, view, setView, refresh }),
-    [loaded, error, exists, meta, stats, chapters, cards, currentChapterId, view, refresh],
+    () => ({ loaded, error, exists, meta, stats, chapters, cards, currentChapterId, setCurrentChapterId, view, setView, world, setWorld, refresh }),
+    [loaded, error, exists, meta, stats, chapters, cards, currentChapterId, view, world, refresh],
   )
   return <BookContext.Provider value={value}>{children}</BookContext.Provider>
 }
