@@ -11,10 +11,13 @@ import {
   NotFoundError,
   bookStats,
 } from '@loreloom/core'
-import type { CardKind } from '@loreloom/core'
+import type { BookChange, CardKind } from '@loreloom/core'
 import { Hono } from 'hono'
+import { streamSSE } from 'hono/streaming'
 import type { AiProvider } from './ai/provider.ts'
 import { localGuard } from './guard.ts'
+import { watchBook } from './watcher.ts'
+import type { BookWatcher } from './watcher.ts'
 
 export interface AppOptions {
   bookDir: string
@@ -63,12 +66,21 @@ function cardKind(kind: string): CardKind {
   return kind as CardKind
 }
 
-export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null } {
+const PING_MS = 25_000
+
+export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null; close(): Promise<void> } {
   let book: Book | null = null
+  let watcher: BookWatcher | null = null
+  const clients = new Set<(c: BookChange) => void>()
+  const aborters = new Set<() => void>()
   let opening: Promise<Book | null> | null = null
 
   const becomeReady = (b: Book): Book => {
     book = b
+    void watcher?.close()
+    watcher = watchBook(b, (change) => {
+      for (const send of clients) send(change)
+    })
     opts.onBookReady?.(b)
     return b
   }
@@ -241,6 +253,53 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
     return c.json({ ok: true })
   })
 
+  // ---- external changes (SSE) ----
+  app.get('/api/events', (c) =>
+    streamSSE(c, async (stream) => {
+      const queue: BookChange[] = []
+      let wake: (() => void) | null = null
+      let closed = false
+      const push = (change: BookChange) => {
+        queue.push(change)
+        wake?.()
+      }
+      const stop = () => {
+        closed = true
+        wake?.()
+      }
+      clients.add(push)
+      aborters.add(stop)
+      stream.onAbort(stop)
+      try {
+        await stream.writeSSE({ event: 'ready', data: '{}' })
+        let lastPing = Date.now()
+        while (!closed) {
+          const change = queue.shift()
+          if (change) {
+            await stream.writeSSE({ event: 'change', data: JSON.stringify(change) })
+            continue
+          }
+          const wait = Math.max(0, PING_MS - (Date.now() - lastPing))
+          await new Promise<void>((resolve) => {
+            const t = setTimeout(resolve, wait)
+            wake = () => {
+              clearTimeout(t)
+              resolve()
+            }
+          })
+          wake = null
+          if (!closed && queue.length === 0 && Date.now() - lastPing >= PING_MS) {
+            await stream.writeSSE({ event: 'ping', data: '' })
+            lastPing = Date.now()
+          }
+        }
+      } finally {
+        clients.delete(push)
+        aborters.delete(stop)
+      }
+    }),
+  )
+
   // ---- AI ----
   app.get('/api/ai/status', async (c) => c.json(await opts.provider.status()))
 
@@ -254,5 +313,12 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
     app.get('*', serveStatic({ root, path: 'index.html' }))
   }
 
-  return { app, getBook: () => book }
+  const close = async (): Promise<void> => {
+    for (const stop of aborters) stop()
+    const w = watcher
+    watcher = null
+    await w?.close()
+  }
+
+  return { app, getBook: () => book, close }
 }

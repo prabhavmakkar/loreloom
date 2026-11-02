@@ -43,3 +43,11 @@ export interface Card {
   fields: Record<string, unknown>
   version: string
 }
+
+/** A change made to the book on disk by something other than this app. */
+export interface BookChange {
+  type: 'chapter' | 'card' | 'book'
+  kind?: CardKind
+  id?: string
+  deleted?: boolean
+}

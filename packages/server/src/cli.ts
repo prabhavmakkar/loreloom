@@ -60,12 +60,13 @@ async function main(): Promise<void> {
 
   const here = dirname(fileURLToPath(import.meta.url))
   const repoRoot = resolve(here, '..', '..', '..')
-  const { app } = createApp({
+  const { app, close } = createApp({
     bookDir,
     sampleDir: join(repoRoot, 'sample-book'),
     provider: unavailableProvider,
   })
 
+  process.once('SIGINT', () => void close().finally(() => process.exit(0)))
   const port = await listenOnFreePort(app)
   const url = `http://${HOST}:${port}`
   console.log(`Loreloom is open at ${url}  (book: ${bookDir})`)
