@@ -83,8 +83,9 @@ export function BookProvider({ children }: { children: ReactNode }) {
     void refresh()
   }, [refresh])
 
-  // Every change event (including echoes of our own deletes) just means "refetch".
-  useEffect(() => (exists ? api.subscribeChanges(() => void refresh()) : undefined), [exists, refresh])
+  // Every change event (including echoes of our own deletes) just means "refetch";
+  // so does a reconnect, since changes made while disconnected are never replayed.
+  useEffect(() => (exists ? api.subscribeChanges(() => void refresh(), () => void refresh()) : undefined), [exists, refresh])
 
   // Keep a valid chapter selected as chapters appear or disappear.
   useEffect(() => {

@@ -140,9 +140,18 @@ export async function streamAi(body: AiRunBody, onEvent: (ev: AiEvent) => void, 
   feed(decoder.decode())
 }
 
-/** Subscribes to on-disk changes. Returns an unsubscribe function. */
-export function subscribeChanges(onChange: (c: BookChange) => void): () => void {
+/**
+ * Subscribes to on-disk changes. Returns an unsubscribe function.
+ * The browser reconnects silently after a drop; changes made meanwhile are never
+ * delivered, so `onReconnect` fires on every `ready` after the first.
+ */
+export function subscribeChanges(onChange: (c: BookChange) => void, onReconnect?: () => void): () => void {
   const es = new EventSource('/api/events')
+  let seenReady = false
+  es.addEventListener('ready', () => {
+    if (seenReady) onReconnect?.()
+    seenReady = true
+  })
   es.addEventListener('change', (e) => {
     try {
       onChange(JSON.parse((e as MessageEvent<string>).data) as BookChange)

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, getBook, streamAi } from '../src/api.ts'
+import { ApiError, getBook, streamAi, subscribeChanges } from '../src/api.ts'
 import type { AiEvent } from '../src/api.ts'
 
 function streamOf(chunks: string[]): Response {
@@ -42,5 +42,41 @@ describe('request errors', () => {
     const err = await getBook().catch((e: unknown) => e)
     expect(err).toBeInstanceOf(ApiError)
     expect(err).toMatchObject({ status: 403, body: { error: 'forbidden' } })
+  })
+})
+
+describe('subscribeChanges', () => {
+  class FakeEventSource {
+    static last: FakeEventSource
+    listeners = new Map<string, ((e: MessageEvent<string>) => void)[]>()
+    closed = false
+    constructor(public url: string) {
+      FakeEventSource.last = this
+    }
+    addEventListener(type: string, fn: (e: MessageEvent<string>) => void) {
+      this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn])
+    }
+    emit(type: string, data = '{}') {
+      for (const fn of this.listeners.get(type) ?? []) fn({ data } as MessageEvent<string>)
+    }
+    close() {
+      this.closed = true
+    }
+  }
+
+  it('calls onChange for change events and onReconnect only for a second ready', () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const onChange = vi.fn()
+    const onReconnect = vi.fn()
+    const stop = subscribeChanges(onChange, onReconnect)
+    const es = FakeEventSource.last
+    es.emit('ready')
+    expect(onReconnect).not.toHaveBeenCalled()
+    es.emit('change', '{"type":"chapter","id":"a"}')
+    expect(onChange).toHaveBeenCalledWith({ type: 'chapter', id: 'a' })
+    es.emit('ready')
+    expect(onReconnect).toHaveBeenCalledTimes(1)
+    stop()
+    expect(es.closed).toBe(true)
   })
 })
