@@ -1,9 +1,9 @@
-import { act, StrictMode } from 'react'
+import { act, createRef, StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import type { Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const chapter = { id: 'one', title: 'One', order: 1, status: 'drafting', summary: '', body: 'Kael pressed his palm to the gate.', version: 'v1' }
+const chapter = { id: 'one', title: 'One', order: 1, status: 'drafting' as const, summary: '', body: 'Kael pressed his palm to the gate.', version: 'v1' }
 
 vi.mock('../src/api.ts', async (orig) => {
   const real = await orig<typeof import('../src/api.ts')>()
@@ -20,7 +20,8 @@ vi.mock('../src/state/BookContext.tsx', () => ({
 }))
 
 const api = await import('../src/api.ts')
-const { Editor } = await import('../src/editor/Editor.tsx')
+const { Editor, READ_ONLY_NOTICE } = await import('../src/editor/Editor.tsx')
+type EditorHandle = import('../src/editor/Editor.tsx').EditorHandle
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -41,6 +42,26 @@ afterEach(() => {
 const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 20))))
 
 describe('<Editor>', () => {
+  it('opens a chapter with content it cannot represent read-only, and never saves it', async () => {
+    const lossy = 'Kael.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<!-- TODO -->'
+    vi.mocked(api.getChapter).mockResolvedValueOnce({ ...chapter, body: lossy })
+    // even a leftover draft must not be restored or saved over it
+    localStorage.setItem('loreloom:unsaved:chapter:one', JSON.stringify({ value: { body: 'Draft.', base: 'v1' }, at: Date.now() }))
+    const ref = createRef<EditorHandle>()
+    act(() => root.render(<Editor key="one" ref={ref} chapterId="one" />))
+    await settle()
+    const pm = host.querySelector('.prose-editor')!
+    expect(pm.getAttribute('contenteditable')).toBe('false')
+    expect(host.textContent).toContain(READ_ONLY_NOTICE)
+    expect(host.textContent).not.toContain('Restored unsaved changes')
+    act(() => ref.current!.insertAtCursor('Helper text.'))
+    await act(async () => void (await new Promise((r) => setTimeout(r, 1500))))
+    act(() => root.render(null))
+    await settle()
+    expect(api.saveChapter).not.toHaveBeenCalled()
+    expect(JSON.parse(localStorage.getItem('loreloom:unsaved:chapter:one')!).value.body).toBe('Draft.')
+  })
+
   it('opening a chapter (StrictMode double mount) never saves or stores a draft', async () => {
     act(() =>
       root.render(

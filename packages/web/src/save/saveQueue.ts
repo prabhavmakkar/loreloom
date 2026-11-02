@@ -35,8 +35,11 @@ export interface SaveQueue<T> {
   hasUnsaved(): boolean
   /** Drops the unsaved value and its stored copy (the author chose the version on disk). */
   discard(): void
-  /** Stops timers. The stored copy stays, so the text can still be restored. */
-  dispose(): void
+  /**
+   * Stops timers. The stored copy stays, so the text can still be restored; a save already
+   * in flight may land but no longer touches storage. Resolves once that save has settled.
+   */
+  dispose(): Promise<void>
 }
 
 interface Stored<T> {
@@ -121,6 +124,8 @@ export function createSaveQueue<T>(o: SaveQueueOptions<T>): SaveQueue<T> {
     inFlight = (async () => {
       try {
         await o.save(value)
+        // Disposed meanwhile: another queue may own this key now, so leave storage alone.
+        if (disposed) return
         savedSeq = Math.max(savedSeq, mySeq)
         if (!unsaved()) {
           unstore()
@@ -191,6 +196,7 @@ export function createSaveQueue<T>(o: SaveQueueOptions<T>): SaveQueue<T> {
     dispose() {
       disposed = true
       clearTimers()
+      return inFlight ?? Promise.resolve()
     },
   }
 }

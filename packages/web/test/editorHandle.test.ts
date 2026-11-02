@@ -58,6 +58,18 @@ describe('EditorHandle', () => {
     expect(editor.getMarkdown()).toBe('Alpha *gamma*.\n\nA new paragraph.')
   })
 
+  it('changes nothing while the editor is read-only, but still reads', () => {
+    const { editor, handle } = setup(MD)
+    editor.setEditable(false, false)
+    handle.insertAtCursor('X')
+    handle.replaceRange(0, 5, 'Y')
+    editor.commands.selectAll()
+    handle.replaceSelection('Z')
+    expect(editor.getMarkdown()).toBe(MD)
+    expect(handle.getPlainText()).toContain('First line here.')
+    expect(handle.getSelectionText()).toBe(handle.getPlainText())
+  })
+
   it('highlightRange decorates the passage without changing the text', () => {
     const { editor, handle } = setup(MD)
     const text = handle.getPlainText()

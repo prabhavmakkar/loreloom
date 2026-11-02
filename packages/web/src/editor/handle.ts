@@ -112,8 +112,19 @@ function toContent(text: string): JSONContent[] {
   return blocks
 }
 
-/** Builds the handle over whichever editor instance is current. Calls are no-ops before it exists. */
-export function createEditorHandle(get: () => Editor | null): EditorHandle {
+/**
+ * Builds the handle over whichever editor instance is current. Calls are no-ops before it
+ * exists, and the ones that change text are no-ops while it is read-only.
+ */
+export function createEditorHandle(getEditor: () => Editor | null): EditorHandle {
+  const get = () => {
+    const ed = getEditor()
+    return ed && !ed.isDestroyed && ed.isEditable ? ed : null
+  }
+  const read = () => {
+    const ed = getEditor()
+    return ed && !ed.isDestroyed ? ed : null
+  }
   return {
     insertAtCursor(text) {
       get()?.chain().focus().insertContent(toContent(text)).run()
@@ -125,13 +136,13 @@ export function createEditorHandle(get: () => Editor | null): EditorHandle {
       ed.chain().focus().insertContentAt({ from, to }, toContent(text)).run()
     },
     getSelectionText() {
-      const ed = get()
+      const ed = read()
       if (!ed) return ''
       const { from, to } = ed.state.selection
       return ed.state.doc.textBetween(from, to, BLOCK_SEP, leafText)
     },
     highlightRange(from, to) {
-      const ed = get()
+      const ed = read()
       if (!ed) return
       const r = range(ed, from, to)
       const tr = ed.state.tr.setMeta(highlightKey, r).setMeta('addToHistory', false)
@@ -144,7 +155,7 @@ export function createEditorHandle(get: () => Editor | null): EditorHandle {
       ed.chain().focus().insertContentAt(range(ed, from, to), toContent(text)).run()
     },
     getPlainText() {
-      const ed = get()
+      const ed = read()
       return ed ? plainTextMap(ed.state.doc).text : ''
     },
   }

@@ -8,7 +8,7 @@ import type { SaveQueue, SaveStatus } from '../save/saveQueue.ts'
 import { useBook } from '../state/BookContext.tsx'
 import { createEditorHandle, PassageHighlight } from './handle.ts'
 import type { EditorHandle } from './handle.ts'
-import { markdownExtensions } from './markdown.ts'
+import { docToMarkdown, isLossyMarkdown, markdownExtensions, markdownToDoc } from './markdown.ts'
 import { cardSuggestion } from './mentions.tsx'
 
 export type { EditorHandle } from './handle.ts'
@@ -74,8 +74,11 @@ function formatWhen(at: number): string {
 
 /** Replaces the document without counting as an edit. */
 function setBody(editor: TiptapEditor, body: string) {
-  editor.commands.setContent(body, { contentType: 'markdown', emitUpdate: false })
+  editor.commands.setContent(markdownToDoc(body), { emitUpdate: false })
 }
+
+export const READ_ONLY_NOTICE =
+  "This chapter contains formatting Loreloom can't edit yet (tables, images, HTML or footnotes). It's shown read-only so nothing is lost."
 
 // ---- the editor ---------------------------------------------------------------------------
 
@@ -99,6 +102,9 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
   const [loadError, setLoadError] = useState(false)
   const [restoredAt, setRestoredAt] = useState<number | null>(null)
   const [theirs, setTheirs] = useState<Chapter | null>(null)
+  // Editing would drop something the editor can't represent: show it, never save it.
+  const [readOnly, setReadOnly] = useState(false)
+  const readOnlyRef = useRef(false)
 
   const baseRef = useRef('') // the on-disk version our next save builds on
   const queueRef = useRef<SaveQueue<Draft> | null>(null)
@@ -113,12 +119,26 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
     // Only real edits count. TipTap also emits `update` from setEditable(), which must never
     // be mistaken for the author's text (it would queue whatever the document holds then).
     onUpdate: ({ editor: ed, transaction }) => {
-      if (!transaction.docChanged) return
-      queueRef.current?.update({ body: ed.getMarkdown(), base: baseRef.current })
+      if (!transaction.docChanged || readOnlyRef.current) return
+      queueRef.current?.update({ body: docToMarkdown(ed.getJSON()), base: baseRef.current })
     },
   })
 
   useImperativeHandle(ref, () => createEditorHandle(() => editor), [editor])
+
+  /** Shows a body from disk; returns false (and locks the editor) when editing it would lose content. */
+  const showDiskBody = useCallback(
+    (body: string): boolean => {
+      if (!editor) return false
+      const lossy = isLossyMarkdown(body)
+      readOnlyRef.current = lossy
+      setReadOnly(lossy)
+      setBody(editor, body)
+      editor.setEditable(!lossy, false)
+      return !lossy
+    },
+    [editor],
+  )
 
   // One save queue per open chapter; load the chapter and any draft left behind.
   useEffect(() => {
@@ -155,16 +175,23 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
         // its draft is in storage and gets restored below.
         const stale = queueByChapter.get(chapterId)
         if (stale && stale !== q) {
-          stale.dispose()
           liveQueues.delete(stale)
+          await stale.dispose() // let its in-flight save land before reading the draft
         }
         queueByChapter.set(chapterId, q)
         const ch = await api.getChapter(chapterId)
         if (!open) return
         baseRef.current = ch.version
-        setBody(editor, ch.body)
+        setChapter(ch)
+        setLoadError(false)
+        if (!showDiskBody(ch.body)) {
+          // Read-only: any draft stays in storage untouched; nothing is saved.
+          if (reporter === me) onSaveStateRef.current?.(null)
+          return
+        }
         const draft = restoreUnsaved<Draft>(key, storage)
-        if (draft && typeof draft.body === 'string' && draft.body !== ch.body) {
+        const same = (b: string) => b === ch.body || b === docToMarkdown(markdownToDoc(ch.body))
+        if (draft && typeof draft.body === 'string' && !same(draft.body)) {
           setBody(editor, draft.body)
           setRestoredAt(unsavedAt(key, storage) ?? Date.now())
           // Build on the version the draft was written against: if the file changed since,
@@ -177,9 +204,6 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
         } else if (reporter === me) {
           onSaveStateRef.current?.(null) // nothing to report until the first edit
         }
-        setChapter(ch)
-        setLoadError(false)
-        editor.setEditable(true, false)
       } catch {
         if (open) setLoadError(true)
       }
@@ -200,7 +224,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
         if (closing.get(chapterId) === done) closing.delete(chapterId)
       })
     }
-  }, [editor, chapterId, loadTick])
+  }, [editor, chapterId, loadTick, showDiskBody])
 
   // Outside changes: reload silently when clean; when dirty, try to save, which surfaces a
   // conflict (409) if the file really changed.
@@ -214,14 +238,14 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
       if (q.hasUnsaved()) return void q.flush()
       baseRef.current = ch.version
       const { from, to } = editor.state.selection
-      setBody(editor, ch.body)
+      showDiskBody(ch.body)
       const end = editor.state.doc.content.size
       editor.commands.setTextSelection({ from: Math.min(from, end), to: Math.min(to, end) })
       setChapter(ch)
     } catch {
       // deleted or unreachable: the book refresh handles it
     }
-  }, [editor, chapterId])
+  }, [editor, chapterId, showDiskBody])
 
   useEffect(
     () =>
@@ -241,7 +265,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
       const ch = await api.getChapter(chapterId)
       q.discard()
       baseRef.current = ch.version
-      setBody(editor, ch.body)
+      showDiskBody(ch.body)
       setChapter(ch)
       setTheirs(null)
       setRestoredAt(null)
@@ -284,7 +308,12 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
           </span>
         </div>
       )}
-      {restoredAt !== null && !theirs && (
+      {readOnly && !theirs && (
+        <div className="banner notice read-only" role="status">
+          <span>{READ_ONLY_NOTICE}</span>
+        </div>
+      )}
+      {restoredAt !== null && !theirs && !readOnly && (
         <div className="banner notice" role="status">
           <span>Restored unsaved changes from {formatWhen(restoredAt)}</span>
           <button type="button" className="icon" aria-label="Dismiss" onClick={() => setRestoredAt(null)}>

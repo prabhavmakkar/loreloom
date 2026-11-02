@@ -231,6 +231,25 @@ describe('createSaveQueue', () => {
     expect(JSON.parse(storage.getItem(KEY)!).value).toBe('draft')
   })
 
+  it('a save that lands after dispose() leaves the stored draft for the next queue', async () => {
+    let resolve!: () => void
+    const { q, storage, statuses } = setup(() => new Promise<void>((r) => (resolve = r)))
+    q.update('draft')
+    await vi.advanceTimersByTimeAsync(1200)
+    const before = statuses.length
+    const disposed = q.dispose()
+    // a new queue for the same chapter now relies on this entry
+    resolve()
+    await disposed
+    expect(JSON.parse(storage.getItem(KEY)!).value).toBe('draft')
+    expect(statuses.length).toBe(before) // and reports nothing
+  })
+
+  it('dispose() resolves at once when nothing is in flight', async () => {
+    const { q } = setup()
+    await expect(q.dispose()).resolves.toBeUndefined()
+  })
+
   it('keeps working when storage throws', async () => {
     const statuses: SaveStatus[] = []
     const save = vi.fn(() => Promise.resolve())
