@@ -14,7 +14,7 @@ async function setup(mode = 'ok') {
   const provider = new ClaudeCodeProvider({ command: process.execPath, commandArgs: [FAKE] })
   const t = await makeApp({ provider })
   await t.req('POST', '/api/book', { sample: true })
-  const calls = async (): Promise<{ argv: string[]; stdin: string }[]> =>
+  const calls = async (): Promise<{ argv: string[]; stdin: string; pid: number }[]> =>
     (await readFile(log, 'utf8').catch(() => ''))
       .split('\n')
       .filter(Boolean)
@@ -86,7 +86,11 @@ describe('/api/ai', () => {
     const reader = res.body!.getReader()
     const dec = new TextDecoder()
     let buf = ''
-    while (!buf.includes('"requestId"')) buf += dec.decode((await reader.read()).value)
+    while (!buf.includes('"requestId"')) {
+      const r = await reader.read()
+      if (r.done) throw new Error(`stream ended before the start event: ${buf}`)
+      buf += dec.decode(r.value)
+    }
     const requestId = JSON.parse(buf.match(/data: (\{"type":"start".*\})/)![1]!).requestId
     expect((await req('POST', '/api/ai/cancel', { requestId })).status).toBe(200)
     let rest = ''
@@ -96,6 +100,32 @@ describe('/api/ai', () => {
       rest += dec.decode(value)
     }
     expect(buf + rest).toContain('"code":"cancelled"')
+  })
+
+  it('aborts the run when the client disconnects', async () => {
+    const { req, calls } = await setup('slow')
+    const res = await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'go' })
+    const reader = res.body!.getReader()
+    const dec = new TextDecoder()
+    let buf = ''
+    while (!buf.includes('"type":"text"')) {
+      const r = await reader.read()
+      if (r.done) throw new Error(`stream ended early: ${buf}`)
+      buf += dec.decode(r.value)
+    }
+    await reader.cancel()
+    const [call] = await calls()
+    const deadline = Date.now() + 4000
+    let alive = true
+    while (alive && Date.now() < deadline) {
+      try {
+        process.kill(call!.pid, 0)
+        await new Promise((r) => setTimeout(r, 50))
+      } catch {
+        alive = false
+      }
+    }
+    expect(alive).toBe(false)
   })
 
   it('validates input', async () => {
