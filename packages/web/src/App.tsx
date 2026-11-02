@@ -1,18 +1,22 @@
+import { useRef, useState } from 'react'
+import { Editor } from './editor/Editor.tsx'
+import type { EditorHandle, SaveState } from './editor/Editor.tsx'
 import { FirstRun } from './layout/FirstRun.tsx'
 import { Sidebar } from './layout/Sidebar.tsx'
 import { TopBar } from './layout/TopBar.tsx'
 import { BookProvider, useBook } from './state/BookContext.tsx'
 import { useStored } from './useStored.ts'
 
-// Placeholders: replaced by the real components in later tasks.
-function EditorPlaceholder({ title }: { title: string | null }) {
+function NoChapter() {
   return (
     <article className="prose placeholder">
-      <h1>{title ?? 'No chapter yet'}</h1>
-      <p>Editor coming in Task 8.</p>
+      <h1>No chapter yet</h1>
+      <p>Add a chapter to start writing.</p>
     </article>
   )
 }
+
+// Placeholders: replaced by the real components in later tasks.
 const WorldPlaceholder = () => <div className="placeholder-view">World view (CardEditor) coming in Task 9.</div>
 const ChaptersPlaceholder = () => <div className="placeholder-view">Chapters view coming in Task 9.</div>
 const HelperPlaceholder = () => <div className="placeholder-view">Helper tabs coming in Task 10.</div>
@@ -20,6 +24,9 @@ const HelperPlaceholder = () => <div className="placeholder-view">Helper tabs co
 function Shell() {
   const { loaded, error, exists, view, chapters, currentChapterId } = useBook()
   const [helperOpen, setHelperOpen] = useStored('loreloom-helper', true)
+  const [save, setSave] = useState<SaveState | null>(null)
+  // For the helper (Tasks 10–11).
+  const editorRef = useRef<EditorHandle>(null)
 
   if (!loaded) return <div className="splash" aria-busy="true">Loreloom</div>
   if (error && !exists) {
@@ -32,13 +39,17 @@ function Shell() {
   }
   if (!exists) return <FirstRun />
 
-  const title = chapters.find((c) => c.id === currentChapterId)?.title ?? null
   return (
     <div className={`shell${helperOpen ? '' : ' helper-closed'}`}>
-      <TopBar helperOpen={helperOpen} onToggleHelper={() => setHelperOpen(!helperOpen)} />
+      <TopBar helperOpen={helperOpen} onToggleHelper={() => setHelperOpen(!helperOpen)} save={save} />
       <Sidebar />
       <main className="centre">
-        {view === 'write' && <EditorPlaceholder title={title} />}
+        {view === 'write' &&
+          (currentChapterId && chapters.some((c) => c.id === currentChapterId) ? (
+            <Editor key={currentChapterId} ref={editorRef} chapterId={currentChapterId} onSaveState={setSave} />
+          ) : (
+            <NoChapter />
+          ))}
         {view === 'world' && <WorldPlaceholder />}
         {view === 'chapters' && <ChaptersPlaceholder />}
       </main>

@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import type { SaveState } from '../editor/Editor.tsx'
+import { formatSaveStatus } from '../save/saveQueue.ts'
 import { useBook } from '../state/BookContext.tsx'
 import type { View } from '../state/BookContext.tsx'
 
@@ -36,9 +38,36 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'chapters', label: 'Chapters' },
 ]
 
+/** Re-renders every 30 s so "N min ago" stays true. */
+function useNow(active: boolean): number {
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!active) return
+    setNow(Date.now())
+    const t = setInterval(() => setNow(Date.now()), 30_000)
+    return () => clearInterval(t)
+  }, [active])
+  return active ? Math.max(now, Date.now()) : now
+}
+
+function SaveStatusView({ save }: { save: SaveState | null }) {
+  const now = useNow(save?.status.state === 'saved')
+  if (!save) return null
+  const { status } = save
+  const text = formatSaveStatus(status, now)
+  if (status.state === 'error') {
+    return (
+      <button type="button" className="retry" onClick={save.retry} title={status.message}>
+        {text}
+      </button>
+    )
+  }
+  return <span className={status.state === 'conflict' ? 'conflict' : undefined}>{text}</span>
+}
+
 const n = (count: number, one: string, many = `${one}s`) => `${count.toLocaleString()} ${count === 1 ? one : many}`
 
-export function TopBar({ helperOpen, onToggleHelper }: { helperOpen: boolean; onToggleHelper(): void }) {
+export function TopBar({ helperOpen, onToggleHelper, save }: { helperOpen: boolean; onToggleHelper(): void; save: SaveState | null }) {
   const { meta, stats, view, setView } = useBook()
   const [theme, toggleTheme] = useTheme()
   return (
@@ -49,7 +78,9 @@ export function TopBar({ helperOpen, onToggleHelper }: { helperOpen: boolean; on
           {n(stats.pages, 'page')} · {n(stats.chapters, 'chapter')} · {n(stats.words, 'word')}
         </span>
       )}
-      <div id="save-status" className="save-status" aria-live="polite" />
+      <div id="save-status" className="save-status" aria-live="polite">
+        <SaveStatusView save={save} />
+      </div>
       <nav className="views" aria-label="Views">
         {VIEWS.map((v) => (
           <button key={v.id} type="button" className={v.id === view ? 'on' : ''} aria-current={v.id === view ? 'page' : undefined} onClick={() => setView(v.id)}>
