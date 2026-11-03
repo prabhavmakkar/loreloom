@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import * as api from '../api.ts'
 import type { SaveState } from '../editor/Editor.tsx'
 import { formatSaveStatus } from '../save/saveQueue.ts'
 import { useBook } from '../state/BookContext.tsx'
@@ -65,14 +66,67 @@ function SaveStatusView({ save }: { save: SaveState | null }) {
   return <span className={status.state === 'conflict' ? 'conflict' : undefined}>{text}</span>
 }
 
+/** The book title; click to rename. Enter or leaving the field saves, Escape cancels, blank is refused. */
+function BookTitle() {
+  const { meta, refresh } = useBook()
+  const [editing, setEditing] = useState<string | null>(null)
+  const done = useRef(false) // Enter/Escape already handled; ignore the blur that follows
+  const title = meta?.title ?? ''
+
+  const start = () => {
+    done.current = false
+    setEditing(title)
+  }
+  const finish = async (save: boolean) => {
+    if (done.current || editing === null) return
+    done.current = true
+    const next = editing.trim()
+    setEditing(null)
+    if (!save || next === '' || next === title) return
+    try {
+      await api.updateBook({ title: next })
+    } catch {
+      // not renamed: the refresh below shows the title on disk again
+    }
+    await refresh()
+  }
+
+  return (
+    <h1 className="book-title">
+      {editing === null ? (
+        <button type="button" className="book-title-button" onClick={start} title="Rename book">
+          {title}
+        </button>
+      ) : (
+        <input
+          aria-label="Book title"
+          value={editing}
+          autoFocus
+          onChange={(e) => setEditing(e.target.value)}
+          onBlur={() => void finish(true)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              void finish(true)
+            } else if (e.key === 'Escape') {
+              e.preventDefault()
+              void finish(false)
+            }
+          }}
+        />
+      )}
+    </h1>
+  )
+}
+
 const n = (count: number, one: string, many = `${one}s`) => `${count.toLocaleString()} ${count === 1 ? one : many}`
 
 export function TopBar({ helperOpen, onToggleHelper, save }: { helperOpen: boolean; onToggleHelper(): void; save: SaveState | null }) {
-  const { meta, stats, view, setView } = useBook()
+  const { stats, view, setView } = useBook()
   const [theme, toggleTheme] = useTheme()
   return (
     <header className="topbar">
-      <h1 className="book-title">{meta?.title}</h1>
+      <BookTitle />
       {stats && (
         <span className="stats">
           {n(stats.pages, 'page')} · {n(stats.chapters, 'chapter')} · {n(stats.words, 'word')}
