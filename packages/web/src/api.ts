@@ -31,7 +31,17 @@ async function readBody(res: Response): Promise<unknown> {
   }
 }
 
-async function request<T>(method: string, path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
+/** A write that hangs (say, the browser's connection pool is starved) must fail, so the save queue retries. */
+const WRITE_TIMEOUT_MS = 15_000
+
+function writeSignal(method: string, signal?: AbortSignal): AbortSignal | undefined {
+  if (method === 'GET' || typeof AbortSignal.timeout !== 'function') return signal
+  const timeout = AbortSignal.timeout(WRITE_TIMEOUT_MS)
+  return signal && typeof AbortSignal.any === 'function' ? AbortSignal.any([signal, timeout]) : (signal ?? timeout)
+}
+
+async function request<T>(method: string, path: string, body?: unknown, callerSignal?: AbortSignal): Promise<T> {
+  const signal = writeSignal(method, callerSignal)
   const res = await fetch(`/api${path}`, {
     method,
     headers: body === undefined ? HEADERS : { ...HEADERS, 'Content-Type': 'application/json' },
@@ -142,57 +152,83 @@ export async function streamAi(body: AiRunBody, onEvent: (ev: AiEvent) => void, 
 
 const SILENT_MS = 60_000
 
+interface Subscriber {
+  onChange(c: BookChange): void
+  onReconnect?: (() => void) | undefined
+}
+
+/**
+ * One EventSource for the whole page, shared by every subscriber: browsers allow only about
+ * six connections per host, and one stream per subscriber would leave saves stalled.
+ */
+const subscribers = new Set<Subscriber>()
+let shared: { es: EventSource; seenReady: boolean; timer?: ReturnType<typeof setTimeout>; watchdog?: ReturnType<typeof setTimeout> } | null =
+  null
+
+function openShared(): void {
+  const s: NonNullable<typeof shared> = { es: null as unknown as EventSource, seenReady: false }
+  shared = s
+  const live = () => shared === s
+  const reconnect = (delay: number) => {
+    clearTimeout(s.watchdog)
+    s.es.close()
+    s.timer = setTimeout(connect, delay)
+  }
+  // The server pings every 25 s; silence for longer means a stale stream (a proxy can keep
+  // the browser's side open after the server is gone, with no error at all).
+  const alive = () => {
+    clearTimeout(s.watchdog)
+    s.watchdog = setTimeout(() => reconnect(0), SILENT_MS)
+  }
+  const connect = () => {
+    if (!live()) return
+    const es = new EventSource('/api/events')
+    s.es = es
+    alive()
+    es.addEventListener('ready', () => {
+      alive()
+      if (s.seenReady) for (const sub of [...subscribers]) sub.onReconnect?.()
+      s.seenReady = true
+    })
+    es.addEventListener('ping', alive)
+    es.addEventListener('change', (e) => {
+      alive()
+      let change: BookChange
+      try {
+        change = JSON.parse((e as MessageEvent<string>).data) as BookChange
+      } catch {
+        return // ignore a malformed frame
+      }
+      for (const sub of [...subscribers]) sub.onChange(change)
+    })
+    // An HTTP error (e.g. a 502 from the dev proxy while the server is down) makes the
+    // browser give up for good; reconnect ourselves. Network errors it retries on its own.
+    es.addEventListener('error', () => {
+      if (live() && es.readyState === EventSource.CLOSED) reconnect(3000)
+    })
+  }
+  connect()
+}
+
+function closeShared(): void {
+  if (!shared) return
+  clearTimeout(shared.timer)
+  clearTimeout(shared.watchdog)
+  shared.es.close()
+  shared = null
+}
+
 /**
  * Subscribes to on-disk changes. Returns an unsubscribe function.
  * The browser reconnects silently after a drop; changes made meanwhile are never
  * delivered, so `onReconnect` fires on every `ready` after the first.
  */
 export function subscribeChanges(onChange: (c: BookChange) => void, onReconnect?: () => void): () => void {
-  let seenReady = false
-  let stopped = false
-  let es: EventSource
-  let timer: ReturnType<typeof setTimeout> | undefined
-  let watchdog: ReturnType<typeof setTimeout> | undefined
-  const reconnect = (delay: number) => {
-    clearTimeout(watchdog)
-    es.close()
-    timer = setTimeout(connect, delay)
-  }
-  // The server pings every 25 s; silence for longer means a stale stream (a proxy can keep
-  // the browser's side open after the server is gone, with no error at all).
-  const alive = () => {
-    clearTimeout(watchdog)
-    watchdog = setTimeout(() => reconnect(0), SILENT_MS)
-  }
-  const connect = () => {
-    if (stopped) return
-    es = new EventSource('/api/events')
-    alive()
-    es.addEventListener('ready', () => {
-      alive()
-      if (seenReady) onReconnect?.()
-      seenReady = true
-    })
-    es.addEventListener('ping', alive)
-    es.addEventListener('change', (e) => {
-      alive()
-      try {
-        onChange(JSON.parse((e as MessageEvent<string>).data) as BookChange)
-      } catch {
-        // ignore a malformed frame
-      }
-    })
-    // An HTTP error (e.g. a 502 from the dev proxy while the server is down) makes the
-    // browser give up for good; reconnect ourselves. Network errors it retries on its own.
-    es.addEventListener('error', () => {
-      if (!stopped && es.readyState === EventSource.CLOSED) reconnect(3000)
-    })
-  }
-  connect()
+  const sub: Subscriber = { onChange, onReconnect }
+  subscribers.add(sub)
+  if (!shared) openShared()
   return () => {
-    stopped = true
-    clearTimeout(timer)
-    clearTimeout(watchdog)
-    es.close()
+    if (!subscribers.delete(sub)) return
+    if (subscribers.size === 0) closeShared()
   }
 }

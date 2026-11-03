@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiError, getBook, streamAi, subscribeChanges } from '../src/api.ts'
+import { ApiError, getBook, saveChapter, streamAi, subscribeChanges } from '../src/api.ts'
 import type { AiEvent } from '../src/api.ts'
 
 function streamOf(chunks: string[]): Response {
@@ -45,15 +45,29 @@ describe('request errors', () => {
   })
 })
 
+describe('request timeouts', () => {
+  it('gives a write a timeout signal so a stalled save fails and retries, but not a read', async () => {
+    const fetchMock = vi.fn(async () => new Response('{}', { status: 200 }))
+    vi.stubGlobal('fetch', fetchMock)
+    await saveChapter('a', { body: 'x' }, 'v1')
+    await getBook()
+    const [put, get] = fetchMock.mock.calls.map((c) => (c as unknown as [string, RequestInit])[1])
+    expect(put!.signal).toBeInstanceOf(AbortSignal)
+    expect(get!.signal).toBeUndefined()
+  })
+})
+
 describe('subscribeChanges', () => {
   class FakeEventSource {
     static last: FakeEventSource
+    static created = 0
     static CLOSED = 2
     listeners = new Map<string, ((e: MessageEvent<string>) => void)[]>()
     closed = false
     readyState = 1
     constructor(public url: string) {
       FakeEventSource.last = this
+      FakeEventSource.created++
     }
     addEventListener(type: string, fn: (e: MessageEvent<string>) => void) {
       this.listeners.set(type, [...(this.listeners.get(type) ?? []), fn])
@@ -65,6 +79,36 @@ describe('subscribeChanges', () => {
       this.closed = true
     }
   }
+
+  // Browsers allow ~6 connections per host; one EventSource per subscriber would starve saves.
+  it('shares one EventSource between subscribers and closes it after the last unsubscribe', () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    FakeEventSource.created = 0
+    const a = vi.fn()
+    const b = vi.fn()
+    const c = vi.fn()
+    const reconnects = [vi.fn(), vi.fn(), vi.fn()]
+    const stops = [subscribeChanges(a, reconnects[0]), subscribeChanges(b, reconnects[1]), subscribeChanges(c, reconnects[2])]
+    expect(FakeEventSource.created).toBe(1)
+    const es = FakeEventSource.last
+    es.emit('ready')
+    es.emit('change', '{"type":"chapter","id":"a"}')
+    for (const fn of [a, b, c]) expect(fn).toHaveBeenCalledWith({ type: 'chapter', id: 'a' })
+    es.emit('ready')
+    for (const fn of reconnects) expect(fn).toHaveBeenCalledTimes(1)
+    stops[0]!()
+    stops[1]!()
+    expect(es.closed).toBe(false)
+    es.emit('change', '{"type":"chapter","id":"b"}')
+    expect(a).toHaveBeenCalledTimes(1)
+    expect(c).toHaveBeenCalledTimes(2)
+    stops[2]!()
+    expect(es.closed).toBe(true)
+    stops[2]!() // a second call is harmless
+    const again = subscribeChanges(() => {})
+    expect(FakeEventSource.created).toBe(2)
+    again()
+  })
 
   it('calls onChange for change events and onReconnect only for a second ready', () => {
     vi.stubGlobal('EventSource', FakeEventSource)

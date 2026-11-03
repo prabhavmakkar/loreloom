@@ -65,6 +65,7 @@ async function main(): Promise<void> {
   const port = await listenOnFreePort(app)
   const url = `http://${HOST}:${port}`
   console.log(`Loreloom is open at ${url}  (book: ${bookDir})`)
+  console.log('Already have Loreloom open in a tab? Keep using that one; many open tabs can slow saving down.')
   if (!noOpen) openBrowser(url)
 }
 
