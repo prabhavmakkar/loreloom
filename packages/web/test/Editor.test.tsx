@@ -64,7 +64,9 @@ describe('<Editor>', () => {
     await settle()
     act(() => ref.current!.insertAtCursor('More words.'))
     expect(refreshSoon).not.toHaveBeenCalled()
-    await act(async () => void (await new Promise((r) => setTimeout(r, 1500))))
+    // the save lands after the queue's debounce; poll so a loaded test run doesn't flake
+    for (let t = 0; t < 60 && !vi.mocked(api.saveChapter).mock.calls.length; t++) await act(async () => void (await new Promise((r) => setTimeout(r, 50))))
+    await settle()
     expect(api.saveChapter).toHaveBeenCalled()
     expect(refreshSoon).toHaveBeenCalled()
   })
