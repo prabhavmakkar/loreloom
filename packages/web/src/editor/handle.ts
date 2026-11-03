@@ -18,6 +18,8 @@ export interface EditorHandle {
   getPlainText(): string
   /** Plain text from the start of the chapter to the cursor (to the end of the selection, if any). */
   getTextBeforeCursor(): string
+  /** False while the chapter is read-only (or not open): the text-changing calls then do nothing. */
+  isEditable(): boolean
 }
 
 interface Segment {
@@ -163,6 +165,9 @@ export function createEditorHandle(getEditor: () => Editor | null): EditorHandle
     getPlainText() {
       const ed = read()
       return ed ? plainTextMap(ed.state.doc).text : ''
+    },
+    isEditable() {
+      return get() !== null
     },
   }
 }

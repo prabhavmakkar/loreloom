@@ -19,6 +19,14 @@ const MD = `First line here.
 "It knows you," [Mira](@character/mira) said, *quietly*.`
 
 describe('EditorHandle', () => {
+  it('isEditable reports whether text-changing calls will take effect', () => {
+    const { editor, handle } = setup(MD)
+    expect(handle.isEditable()).toBe(true)
+    editor.setEditable(false)
+    expect(handle.isEditable()).toBe(false)
+    expect(createEditorHandle(() => null).isEditable()).toBe(false)
+  })
+
   it('getPlainText joins paragraphs with a blank line and shows mention labels', () => {
     const { handle } = setup(MD)
     expect(handle.getPlainText()).toBe('First line here.\n\n"It knows you," Mira said, quietly.')

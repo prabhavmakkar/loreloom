@@ -15,6 +15,7 @@ export const NEXT_SCENE_MESSAGE = `Draft the next scene, following on from where
 export function DraftTab({ chapterId, editor }: { chapterId: string | null; editor: RefObject<EditorHandle | null> }) {
   const [instruction, setInstruction] = useState('')
   const [hasSelection, setHasSelection] = useState(false)
+  const [editable, setEditable] = useState(false)
   const [copied, setCopied] = useState(false)
   const { run, cancel, reset, state, text, activity, error } = useAiRun()
   const last = useRef<AiRunBody | null>(null)
@@ -22,7 +23,10 @@ export function DraftTab({ chapterId, editor }: { chapterId: string | null; edit
   const canEdit = useBook().view === 'write' // the chapter editor is only mounted in the write view
 
   // Re-checked on focus and when a run ends, not polled.
-  const checkSelection = useCallback(() => setHasSelection((editor.current?.getSelectionText() ?? '') !== ''), [editor])
+  const checkSelection = useCallback(() => {
+    setHasSelection((editor.current?.getSelectionText() ?? '') !== '')
+    setEditable(editor.current?.isEditable() ?? false) // a read-only chapter can't take the draft
+  }, [editor])
   useEffect(() => {
     window.addEventListener('focus', checkSelection)
     return () => window.removeEventListener('focus', checkSelection)
@@ -105,15 +109,15 @@ export function DraftTab({ chapterId, editor }: { chapterId: string | null; edit
           </div>
           <p className="muted hint">Nothing is added to your chapter until you choose.</p>
           <div className="helper-actions">
-            <button type="button" className="small primary" onClick={() => editor.current?.insertAtCursor(text)} disabled={running || !canEdit}>
+            <button type="button" className="small primary" onClick={() => editor.current?.insertAtCursor(text)} disabled={running || !canEdit || !editable}>
               Insert at cursor
             </button>
             <button
               type="button"
               className="small"
               onClick={() => editor.current?.replaceSelection(text)}
-              disabled={running || !canEdit || !hasSelection}
-              title={hasSelection ? undefined : 'Select some text in the chapter first'}
+              disabled={running || !canEdit || !editable || !hasSelection}
+              title={!editable ? 'This chapter is read-only' : hasSelection ? undefined : 'Select some text in the chapter first'}
             >
               Replace selection
             </button>
