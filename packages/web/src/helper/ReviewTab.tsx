@@ -15,6 +15,8 @@ const LABEL: Record<ReviewCategory, string> = { continuity: 'Continuity', prose:
 
 type Card = 'applied' | 'dismissed' | 'missing'
 
+export const AMBIGUOUS_NOTICE = 'This passage appears more than once. Use Show and edit it by hand.'
+
 export function ReviewTab({ chapterId, editor }: { chapterId: string | null; editor: RefObject<EditorHandle | null> }) {
   const [hasSelection, setHasSelection] = useState(false)
   const [done, setDone] = useState<Record<string, Card>>({})
@@ -63,10 +65,15 @@ export function ReviewTab({ chapterId, editor }: { chapterId: string | null; edi
     else mark(s.id, 'missing')
   }
   const apply = (s: ReviewSuggestion) => {
+    const ed = editor.current
     const at = locate(s) // the text may have changed since the review, so look again now
-    if (!at) return mark(s.id, 'missing')
-    editor.current?.replaceRange(at.from, at.to, s.fix)
+    if (!ed || !at) return mark(s.id, 'missing')
+    if (at.count > 1) return // ambiguous: the card says so and Apply is disabled
+    const before = ed.getPlainText().length
+    ed.replaceRange(at.from, at.to, s.fix)
     mark(s.id, 'applied')
+    const to = at.to + (ed.getPlainText().length - before)
+    if (to > at.from) ed.highlightRange(at.from, to)
   }
 
   const visible = suggestions.filter((s) => done[s.id] !== 'dismissed')
@@ -96,6 +103,7 @@ export function ReviewTab({ chapterId, editor }: { chapterId: string | null; edi
           <h3>{LABEL[g.category]}</h3>
           {g.items.map((s) => {
             const st = done[s.id]
+            const ambiguous = st !== 'applied' && st !== 'missing' && (locate(s)?.count ?? 0) > 1
             return (
               <article key={s.id} className={`review-card${st === 'applied' ? ' applied' : ''}`} data-category={s.category}>
                 <button type="button" className="review-quote" onClick={() => show(s)} title="Show in chapter">
@@ -104,8 +112,9 @@ export function ReviewTab({ chapterId, editor }: { chapterId: string | null; edi
                 <p className="review-issue">{s.issue}</p>
                 <p className="review-fix">{s.fix === '' ? <em>Cut this.</em> : s.fix}</p>
                 {st === 'missing' && <p className="muted hint">Can't find this passage anymore</p>}
+                {ambiguous && <p className="muted hint">{AMBIGUOUS_NOTICE}</p>}
                 <div className="helper-actions">
-                  <button type="button" className="small primary" onClick={() => apply(s)} disabled={running || !canEdit || st === 'applied' || st === 'missing'}>
+                  <button type="button" className="small primary" onClick={() => apply(s)} disabled={running || !canEdit || ambiguous || st === 'applied' || st === 'missing'}>
                     {st === 'applied' ? 'Applied' : 'Apply'}
                   </button>
                   <button type="button" className="small ghost" onClick={() => mark(s.id, 'dismissed')}>

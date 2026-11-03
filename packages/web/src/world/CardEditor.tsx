@@ -247,10 +247,17 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
     const q = createSaveQueue<Draft>({
       key,
       save: async (d) => {
+        // A card needs a name: while the field is blank, the rest is saved and the name on disk is kept.
         const saved = await api.saveCard(
           kind,
           id,
-          { name: d.name, aliases: d.aliases, summary: d.summary, body: d.body, fields: fieldsFor(kind, fieldsRef.current, d) },
+          {
+            ...(d.name.trim() ? { name: d.name } : {}),
+            aliases: d.aliases,
+            summary: d.summary,
+            body: d.body,
+            fields: fieldsFor(kind, fieldsRef.current, d),
+          },
           baseRef.current,
         )
         baseRef.current = saved.version
@@ -317,8 +324,11 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
     const q = queueRef.current
     if (!q || goneRef.current) return
     if (q.hasUnsaved()) return void q.flush()
+    const startBase = baseRef.current
     try {
       const c = await api.getCard(kind, id)
+      // A save of our own that landed meanwhile is newer than this read.
+      if (baseRef.current !== startBase) return
       if (c.version === baseRef.current || queueRef.current !== q) return
       if (q.hasUnsaved()) return void q.flush()
       baseRef.current = c.version
@@ -353,8 +363,7 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
     const next = { ...(draftRef.current as Omit<Draft, 'base'>), ...patch }
     draftRef.current = next
     setDraftState(next)
-    // A card needs a name; the field keeps what's typed but nothing is saved until it has one.
-    if (next.name.trim()) queueRef.current?.update({ ...next, base: baseRef.current })
+    queueRef.current?.update({ ...next, base: baseRef.current })
   }
 
   const loadTheirs = async () => {

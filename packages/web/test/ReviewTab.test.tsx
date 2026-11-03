@@ -68,3 +68,36 @@ it('re-finds the passage on Apply and disables the card once applied or missing'
   await act(async () => button('Dismiss').click())
   expect(host.querySelectorAll('article')).toHaveLength(1)
 })
+
+it('refuses to Apply a passage that appears more than once', async () => {
+  const text = 'He ran. She stayed. He ran.'
+  const replaceRange = vi.fn()
+  const editor = { current: { getPlainText: () => text, getSelectionText: () => '', replaceRange, highlightRange: vi.fn() } }
+  act(() => root.render(createElement(ReviewTab, { chapterId: 'c1', editor: editor as never })))
+  await act(async () => button('Review chapter').click())
+  await act(async () => {
+    emit({ type: 'suggestion', suggestion: { id: 'r1', quote: 'He ran.', issue: 'Flat', fix: 'He bolted.', category: 'prose' } })
+    release()
+  })
+  expect(button('Apply').hasAttribute('disabled')).toBe(true)
+  expect(host.textContent).toContain('This passage appears more than once. Use Show and edit it by hand.')
+  await act(async () => button('Apply').click())
+  expect(replaceRange).not.toHaveBeenCalled()
+})
+
+it('highlights the new text after Apply', async () => {
+  let text = 'He ran. Kael melted the lock.'
+  const replaceRange = vi.fn((from: number, to: number, fix: string) => {
+    text = text.slice(0, from) + fix + text.slice(to)
+  })
+  const highlightRange = vi.fn()
+  const editor = { current: { getPlainText: () => text, getSelectionText: () => '', replaceRange, highlightRange } }
+  act(() => root.render(createElement(ReviewTab, { chapterId: 'c1', editor: editor as never })))
+  await act(async () => button('Review chapter').click())
+  await act(async () => {
+    emit({ type: 'suggestion', suggestion: { id: 'r1', quote: 'Kael melted the lock.', issue: 'x', fix: 'Kael picked it.', category: 'continuity' } })
+    release()
+  })
+  await act(async () => button('Apply').click())
+  expect(highlightRange).toHaveBeenLastCalledWith(8, 23)
+})

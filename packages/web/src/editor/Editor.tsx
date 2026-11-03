@@ -232,8 +232,11 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
     const q = queueRef.current
     if (!editor || !q) return
     if (q.hasUnsaved()) return void q.flush()
+    const startBase = baseRef.current
     try {
       const ch = await api.getChapter(chapterId)
+      // A save of our own that landed meanwhile is newer than this read.
+      if (baseRef.current !== startBase) return
       if (ch.version === baseRef.current || queueRef.current !== q) return
       if (q.hasUnsaved()) return void q.flush()
       baseRef.current = ch.version

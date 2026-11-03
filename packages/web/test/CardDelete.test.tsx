@@ -59,3 +59,24 @@ it('a failed delete keeps the unsaved draft and shows an error', async () => {
   expect(host.textContent).toContain('Could not delete')
   expect(JSON.parse(localStorage.getItem('loreloom:unsaved:card:term:x')!).value.body).toBe('new text')
 })
+
+it('keeps edits made while the name is blank, and never saves a blank name', async () => {
+  act(() => root.render(<CardEditor kind="term" id="x" onGone={() => {}} />))
+  await settle()
+  const setValue = (el: HTMLInputElement | HTMLTextAreaElement, v: string) =>
+    act(async () => {
+      const proto = el instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype
+      Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, v)
+      el.dispatchEvent(new Event('input', { bubbles: true }))
+    })
+  await setValue(host.querySelector<HTMLInputElement>('.card-name')!, '')
+  await setValue(host.querySelector<HTMLTextAreaElement>('#card-body')!, 'typed while nameless')
+  expect(JSON.parse(localStorage.getItem('loreloom:unsaved:card:term:x')!).value.body).toBe('typed while nameless')
+  act(() => root.unmount())
+  await settle()
+  expect(api.saveCard).toHaveBeenCalled()
+  const patch = vi.mocked(api.saveCard).mock.calls.at(-1)![2]
+  expect(patch.body).toBe('typed while nameless')
+  expect('name' in patch).toBe(false)
+  root = createRoot(host) // afterEach unmounts again
+})

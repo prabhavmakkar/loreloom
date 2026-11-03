@@ -13,7 +13,7 @@ const REVIEW = [
   'The request names which passage that is: a selected passage, or the current chapter. Quote only from that passage, never from the world cards or other chapters.',
   'Check continuity first: compare the passage against the world rules and character cards and flag anything that contradicts them (category "continuity"). Then give notes on prose, pacing and dialogue.',
   'Output one JSON object per line and nothing else: no prose outside the JSON lines, no code fences, no list.',
-  'Each object has exactly these keys: "quote" (text copied verbatim and unchanged from the passage, at most 300 characters, as plain text without markdown link syntax), "issue" (what is wrong, in one or two sentences), "fix" (replacement text for the quote, written in the author\'s voice; use an empty string to suggest cutting it) and "category" (one of "continuity", "prose", "pacing", "dialogue").',
+  'Each object has exactly these keys: "quote" (text copied verbatim and unchanged from the passage, at most 300 characters, as plain text without markdown link syntax and without `*`/`_` emphasis markers), "issue" (what is wrong, in one or two sentences), "fix" (replacement text for the quote, written in the author\'s voice; use an empty string to suggest cutting it) and "category" (one of "continuity", "prose", "pacing", "dialogue").',
   'Be selective: only notes worth the author\'s time, at most 12. If there is nothing to flag, output nothing.',
 ].join(' ')
 
