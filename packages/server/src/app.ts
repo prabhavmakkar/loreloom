@@ -324,7 +324,8 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
     if (body.selection !== undefined && typeof body.selection !== 'string') throw new InvalidInputError('selection must be a string')
     const store = (sessions ??= new SessionStore(b.dir))
     if (body.newConversation === true) await store.clear(mode)
-    const resumeSessionId = body.newConversation === true ? undefined : await store.get(mode)
+    // Only Brainstorm resumes; the store keeps nothing for Draft and Review.
+    let resumeSessionId = body.newConversation === true ? undefined : await store.get(mode)
     const context = await buildContext(b, {
       ...(body.chapterId !== undefined ? { chapterId: body.chapterId } : {}),
       ...(body.selection !== undefined ? { selection: body.selection } : {}),
@@ -345,23 +346,38 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
       }
       try {
         await send({ type: 'start', requestId })
-        for await (const ev of opts.provider.run(
-          {
-            mode,
-            systemPrompt: systemPromptFor(mode, b.meta),
-            prompt: `${context}\n\n## Request\n${message}`,
-            cwd: b.dir,
-            ...(resumeSessionId ? { resumeSessionId } : {}),
-          },
-          ac.signal,
-        )) {
-          if (ev.type === 'session') await store.set(mode, ev.sessionId)
-          if (review && ev.type === 'text') {
-            await sendSuggestions(review.push(ev.text))
-            continue
+        for (;;) {
+          const resumed = resumeSessionId !== undefined
+          let sawText = false
+          let staleResume = false
+          for await (const ev of opts.provider.run(
+            {
+              mode,
+              systemPrompt: systemPromptFor(mode, b.meta),
+              prompt: `${context}\n\n## Request\n${message}`,
+              cwd: b.dir,
+              ...(resumeSessionId ? { resumeSessionId } : {}),
+            },
+            ac.signal,
+          )) {
+            // A resumed session that fails before saying anything is most likely gone
+            // (expired or deleted): forget it and run once more, fresh.
+            if (resumed && !sawText && ev.type === 'error' && ev.code === 'failed' && !ac.signal.aborted) {
+              staleResume = true
+              break
+            }
+            if (ev.type === 'text') sawText = true
+            if (ev.type === 'session') await store.set(mode, ev.sessionId)
+            if (review && ev.type === 'text') {
+              await sendSuggestions(review.push(ev.text))
+              continue
+            }
+            if (review && (ev.type === 'done' || ev.type === 'error')) await sendSuggestions(review.end())
+            await send(ev)
           }
-          if (review && (ev.type === 'done' || ev.type === 'error')) await sendSuggestions(review.end())
-          await send(ev)
+          if (!staleResume) break
+          await store.clear(mode)
+          resumeSessionId = undefined
         }
       } catch (err) {
         console.error(err)
@@ -383,7 +399,7 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
   app.delete('/api/ai/session/:mode', async (c) => {
     const b = await needBook()
     const mode = aiMode(c.req.param('mode'))
-    if (mode === 'review') throw new InvalidInputError('review has no stored session')
+    if (mode !== 'brainstorm') throw new InvalidInputError(`${mode} has no stored session`)
     await (sessions ??= new SessionStore(b.dir)).clear(mode)
     return c.json({ ok: true })
   })

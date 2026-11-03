@@ -3,14 +3,17 @@ import { join } from 'node:path'
 import { writeFileAtomic } from '@loreloom/core'
 import type { AiMode } from './provider.ts'
 
-type Stored = 'brainstorm' | 'draft'
-const isStored = (m: AiMode): m is Stored => m === 'brainstorm' || m === 'draft'
+type Stored = 'brainstorm'
+const isStored = (m: AiMode): m is Stored => m === 'brainstorm'
 const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Only real Claude Code session ids (UUIDs) are accepted, so a synced or hand-edited file can never inject CLI flags. */
 export const isSessionId = (id: unknown): id is string => typeof id === 'string' && SESSION_ID_RE.test(id)
 
-/** Remembers the Claude Code session per mode in `.loreloom/sessions.json`. Review is never stored. */
+/**
+ * Remembers the Claude Code session per mode in `.loreloom/sessions.json`. Only Brainstorm is a
+ * conversation; Draft and Review start fresh every time, with a fresh context pack.
+ */
 export class SessionStore {
   private readonly file: string
   private queue: Promise<unknown> = Promise.resolve()

@@ -101,7 +101,7 @@ export class ClaudeCodeProvider implements AiProvider {
       '--setting-sources',
       '',
       '--strict-mcp-config',
-      ...(input.mode === 'review' ? ['--no-session-persistence'] : []),
+      ...(input.mode === 'brainstorm' ? [] : ['--no-session-persistence']),
       '--tools',
       ...READ_ONLY_TOOLS,
       '--allowedTools',

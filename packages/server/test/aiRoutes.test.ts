@@ -74,11 +74,39 @@ describe('/api/ai', () => {
 
   it('DELETE session clears it', async () => {
     const { req, bookDir } = await setup()
-    await (await req('POST', '/api/ai/run', { mode: 'draft', message: 'Write' })).text()
-    expect((await req('DELETE', '/api/ai/session/draft')).status).toBe(200)
+    await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'Ideas' })).text()
+    expect((await req('DELETE', '/api/ai/session/brainstorm')).status).toBe(200)
     const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8'))
-    expect(stored.draft).toBeUndefined()
+    expect(stored.brainstorm).toBeUndefined()
     expect((await req('DELETE', '/api/ai/session/review')).status).toBe(400)
+    expect((await req('DELETE', '/api/ai/session/draft')).status).toBe(400)
+  })
+
+  it('runs every Draft fresh: no --resume, no stored session, no persistence', async () => {
+    const { req, bookDir, calls } = await setup()
+    await (await req('POST', '/api/ai/run', { mode: 'draft', message: 'Write' })).text()
+    await (await req('POST', '/api/ai/run', { mode: 'draft', message: 'Again' })).text()
+    for (const call of await calls()) {
+      expect(call.argv.some((a) => a.startsWith('--resume'))).toBe(false)
+      expect(call.argv).toContain('--no-session-persistence')
+    }
+    const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8').catch(() => '{}'))
+    expect(stored.draft).toBeUndefined()
+  })
+
+  it('retries a stale Brainstorm resume once, fresh, without showing the failure', async () => {
+    const { req, bookDir, calls } = await setup('stale-resume')
+    await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'First' })).text()
+    const events = parseSse(await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'Second' })).text()).map((e) => e.data)
+    const [, resumed, fresh] = await calls()
+    expect(resumed!.argv).toContain(`--resume=${SID}`)
+    expect(fresh!.argv.some((a) => a.startsWith('--resume'))).toBe(false)
+    expect(fresh!.stdin).toContain('## Request\nSecond')
+    expect(events.filter((e) => e.type === 'start')).toHaveLength(1)
+    expect(events.some((e) => e.type === 'error')).toBe(false)
+    expect(events.at(-1).type).toBe('done')
+    const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8'))
+    expect(stored.brainstorm).toBe(SID)
   })
 
   it('cancel aborts a running request', async () => {

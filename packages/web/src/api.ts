@@ -87,7 +87,7 @@ export const removeRelationship = (id: string, rel: { to: string; kind: string }
 // ---- helper (AI) ----
 export const aiStatus = () => request<AiStatus>('GET', '/ai/status')
 export const cancelAi = (requestId: string) => request<{ ok: true }>('POST', '/ai/cancel', { requestId })
-export const clearAiSession = (mode: Exclude<AiMode, 'review'>) => request<{ ok: true }>('DELETE', `/ai/session/${mode}`)
+export const clearAiSession = (mode: 'brainstorm') => request<{ ok: true }>('DELETE', `/ai/session/${mode}`)
 
 export interface AiRunBody {
   mode: AiMode
