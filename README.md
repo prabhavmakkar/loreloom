@@ -19,7 +19,7 @@ A local, open-source novel-writing app for fantasy writers. You write in plain M
 ## Quick start
 
 ```sh
-git clone https://github.com/<your-name>/loreloom.git
+git clone https://github.com/prabhavmakkar/loreloom.git
 cd loreloom
 npm install
 npm start -- ~/Writing/my-book
