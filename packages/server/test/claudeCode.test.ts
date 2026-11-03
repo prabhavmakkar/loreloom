@@ -176,7 +176,7 @@ describe('ClaudeCodeProvider.status', () => {
     expect(await provider.status()).toEqual({ available: true, subscriptionType: 'pro' })
   })
   it('reports a status timeout as unresponsive (not logged out) and does not cache it', async () => {
-    const { provider } = await setup('hang-status', { statusTimeoutMs: 300 })
+    const { provider } = await setup('hang-status', { statusTimeoutMs: 2000 }) // long enough for the follow-up 'ok' spawn under a loaded test run
     expect(await provider.status()).toEqual({ available: false, reason: 'unresponsive' })
     process.env.FAKE_CLAUDE_MODE = 'ok'
     expect(await provider.status()).toEqual({ available: true, subscriptionType: 'pro' })
