@@ -32,6 +32,28 @@ async function exists(path: string): Promise<boolean> {
   }
 }
 
+/** Ids of the `.md` files in a folder, readable or not. */
+async function fileIds(dir: string): Promise<string[]> {
+  let files: string[]
+  try {
+    files = await readdir(dir)
+  } catch {
+    return []
+  }
+  return files.filter((f) => f.endsWith('.md')).map((f) => f.slice(0, -3)).filter(isValidId)
+}
+
+/** Parses one file of a listing; a file that can't be parsed is skipped, never fatal for the whole book. */
+function parseOrSkip<T>(path: string, parse: () => T): T | null {
+  try {
+    return parse()
+  } catch (err) {
+    if (!(err instanceof InvalidInputError)) throw err
+    console.warn(`Loreloom: skipping ${path}: ${err.message}`)
+    return null
+  }
+}
+
 async function readIfExists(path: string): Promise<string | null> {
   try {
     return await readFile(path, 'utf8')
@@ -151,18 +173,12 @@ export class Book {
   }
 
   async listChapters(): Promise<Chapter[]> {
-    let files: string[]
-    try {
-      files = await readdir(join(this.dir, 'chapters'))
-    } catch {
-      return []
-    }
     const out: Chapter[] = []
-    for (const f of files) {
-      if (!f.endsWith('.md')) continue
-      const id = f.slice(0, -3)
-      if (!isValidId(id)) continue
-      out.push(this.chapterFromText(id, await readFile(this.chapterPath(id), 'utf8')))
+    for (const id of await fileIds(join(this.dir, 'chapters'))) {
+      const path = this.chapterPath(id)
+      const text = await readFile(path, 'utf8')
+      const ch = parseOrSkip(path, () => this.chapterFromText(id, text))
+      if (ch) out.push(ch)
     }
     return out.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id))
   }
@@ -180,7 +196,8 @@ export class Book {
 
   private async createChapterNow(input: { title: string }): Promise<Chapter> {
     const existing = await this.listChapters()
-    const id = uniqueSlug(slugify(input.title), new Set(existing.map((c) => c.id)))
+    // Unreadable files are left out of the list, but their ids are still taken.
+    const id = uniqueSlug(slugify(input.title), new Set(await fileIds(join(this.dir, 'chapters'))))
     const order = existing.reduce((m, c) => Math.max(m, c.order), 0) + 1
     return this.writeChapter({ id, title: input.title, order, status: 'idea', summary: '', body: '' })
   }
@@ -287,17 +304,11 @@ export class Book {
     const out: Card[] = []
     for (const k of kinds) {
       checkKind(k)
-      let files: string[]
-      try {
-        files = await readdir(join(this.dir, 'world', CARD_DIRS[k]))
-      } catch {
-        continue
-      }
-      for (const f of files) {
-        if (!f.endsWith('.md')) continue
-        const id = f.slice(0, -3)
-        if (!isValidId(id)) continue
-        out.push(this.cardFromText(k, id, await readFile(this.cardPath(k, id), 'utf8')))
+      for (const id of await fileIds(join(this.dir, 'world', CARD_DIRS[k]))) {
+        const path = this.cardPath(k, id)
+        const text = await readFile(path, 'utf8')
+        const card = parseOrSkip(path, () => this.cardFromText(k, id, text))
+        if (card) out.push(card)
       }
     }
     return out.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
@@ -323,8 +334,7 @@ export class Book {
 
   private async createCardNow(kind: CardKind, input: { name: string; summary?: string; aliases?: string[] }): Promise<Card> {
     checkKind(kind)
-    const existing = await this.listCards(kind)
-    const id = uniqueSlug(slugify(input.name), new Set(existing.map((c) => c.id)))
+    const id = uniqueSlug(slugify(input.name), new Set(await fileIds(join(this.dir, 'world', CARD_DIRS[kind]))))
     return this.writeCard({
       kind,
       id,

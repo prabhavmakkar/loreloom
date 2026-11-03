@@ -1,4 +1,5 @@
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir, rm, writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import type { Res } from './helpers.ts'
 import { makeApp, SAMPLE_DIR } from './helpers.ts'
@@ -103,6 +104,20 @@ describe('chapters', () => {
 
     expect((await req('DELETE', `/api/chapters/${ch.id}`)).status).toBe(200)
     expect((await req('GET', `/api/chapters/${ch.id}`)).status).toBe(404)
+  })
+
+  it('answers 400 with a message for a chapter whose header cannot be read, and lists the rest', async () => {
+    const { req, bookDir } = await makeApp()
+    await req('POST', '/api/book', { sample: true })
+    await writeFile(join(bookDir, 'chapters', 'broken.md'), '---\ntitle: [unclosed\n---\nText')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const list = await req('GET', '/api/chapters')
+    warn.mockRestore()
+    expect(list.status).toBe(200)
+    expect((await list.json()).map((c: { id: string }) => c.id)).not.toContain('broken')
+    const res = await req('GET', '/api/chapters/broken')
+    expect(res.status).toBe(400)
+    expect((await res.json()).message).toMatch(/header/i)
   })
 
   it('rejects malformed JSON with 400', async () => {

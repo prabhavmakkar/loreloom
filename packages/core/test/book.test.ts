@@ -210,3 +210,40 @@ test('a concurrent card save and relationship edit keep both changes', async () 
   expect(after.body).toBe('new body')
   expect(after.relationships).toEqual([{ to: 'mira', kind: 'ally' }])
 })
+
+test('a chapter with malformed YAML is skipped by listChapters and never overwritten', async () => {
+  const good = await book.createChapter({ title: 'Good' })
+  const bad = join(dir, 'chapters', 'bad.md')
+  const text = '---\ntitle: [unclosed\nstatus: idea\n---\nThe body.'
+  await writeFile(bad, text)
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  expect((await book.listChapters()).map((c) => c.id)).toEqual([good.id])
+  expect(warn).toHaveBeenCalled()
+  warn.mockRestore()
+  await expect(book.getChapter('bad')).rejects.toBeInstanceOf(InvalidInputError)
+  await expect(book.saveChapter('bad', { body: 'clobber' })).rejects.toBeInstanceOf(InvalidInputError)
+  expect(await readFile(bad, 'utf8')).toBe(text)
+})
+
+test('a card with malformed YAML is skipped by listCards and never overwritten', async () => {
+  await book.createCard('place', { name: 'Gate' })
+  const bad = join(dir, 'world', 'places', 'bad.md')
+  const text = '---\nname: "unclosed\n---\nBody.'
+  await writeFile(bad, text)
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  expect((await book.listCards('place')).map((c) => c.id)).toEqual(['gate'])
+  warn.mockRestore()
+  await expect(book.getCard('place', 'bad')).rejects.toBeInstanceOf(InvalidInputError)
+  await expect(book.saveCard('place', 'bad', { body: 'x' })).rejects.toBeInstanceOf(InvalidInputError)
+  expect(await readFile(bad, 'utf8')).toBe(text)
+})
+
+test('a new chapter never takes the id of an unreadable one', async () => {
+  const bad = join(dir, 'chapters', 'bad.md')
+  await writeFile(bad, '---\ntitle: [unclosed\n---\nx')
+  const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+  const c = await book.createChapter({ title: 'Bad' })
+  warn.mockRestore()
+  expect(c.id).not.toBe('bad')
+  expect(await readFile(bad, 'utf8')).toContain('[unclosed')
+})

@@ -77,6 +77,8 @@ function setBody(editor: TiptapEditor, body: string) {
   editor.commands.setContent(markdownToDoc(body), { emitUpdate: false })
 }
 
+export const UNREADABLE_NOTICE = "This chapter's header can't be read; fix it in a text editor."
+
 export const READ_ONLY_NOTICE =
   "This chapter contains formatting Loreloom can't edit yet (tables, images, HTML or footnotes). It's shown read-only so nothing is lost."
 
@@ -101,7 +103,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
   onSaveStateRef.current = onSaveState
 
   const [chapter, setChapter] = useState<Chapter | null>(null)
-  const [loadError, setLoadError] = useState(false)
+  const [loadError, setLoadError] = useState<false | 'failed' | 'unreadable'>(false)
   const [restoredAt, setRestoredAt] = useState<number | null>(null)
   const [theirs, setTheirs] = useState<Chapter | null>(null)
   // Editing would drop something the editor can't represent: show it, never save it.
@@ -207,8 +209,8 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
         } else if (reporter === me) {
           onSaveStateRef.current?.(null) // nothing to report until the first edit
         }
-      } catch {
-        if (open) setLoadError(true)
+      } catch (err) {
+        if (open) setLoadError(err instanceof api.ApiError && err.status === 400 ? 'unreadable' : 'failed')
       }
     })()
 
@@ -291,7 +293,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
   if (loadError) {
     return (
       <div className="prose editor-message">
-        <p>Couldn’t open this chapter.</p>
+        <p>{loadError === 'unreadable' ? UNREADABLE_NOTICE : 'Couldn’t open this chapter.'}</p>
         <button type="button" className="ghost" onClick={() => setLoadTick((t) => t + 1)}>
           Try again
         </button>

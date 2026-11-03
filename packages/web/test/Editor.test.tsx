@@ -43,6 +43,13 @@ afterEach(() => {
 const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 20))))
 
 describe('<Editor>', () => {
+  it('explains a chapter whose header cannot be read', async () => {
+    vi.mocked(api.getChapter).mockRejectedValueOnce(new api.ApiError(400, { error: 'invalid', message: "The header (frontmatter) can't be read" }))
+    act(() => root.render(<Editor key="one" chapterId="one" />))
+    await settle()
+    expect(host.textContent).toContain("This chapter's header can't be read; fix it in a text editor.")
+  })
+
   it('asks the book for a refresh after a successful save, so the word count follows the writing', async () => {
     const ref = createRef<EditorHandle>()
     act(() => root.render(<Editor key="one" ref={ref} chapterId="one" />))
