@@ -9,6 +9,7 @@
     "test": "vitest run",
     "start": "npm run build -w @loreloom/web && tsx packages/server/src/cli.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p packages/web/tsconfig.json --noEmit",
+    "mcp": "tsx packages/mcp/src/index.ts",
     "dev": "concurrently -P -k -n server,web -c blue,green \"tsx watch packages/server/src/cli.ts --no-open {@}\" \"npm run dev -w @loreloom/web\" --"
   },
   "devDependencies": {
