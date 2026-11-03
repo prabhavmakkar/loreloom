@@ -247,3 +247,12 @@ test('a new chapter never takes the id of an unreadable one', async () => {
   expect(c.id).not.toBe('bad')
   expect(await readFile(bad, 'utf8')).toContain('[unclosed')
 })
+
+test('createFromSample never overwrites a file already in the target folder', async () => {
+  const target = await mkdtemp(join(tmpdir(), 'loreloom-sample-'))
+  await mkdir(join(target, 'chapters'), { recursive: true })
+  const mine = join(target, 'chapters', 'the-ember-gate.md')
+  await writeFile(mine, 'my own words')
+  await expect(Book.createFromSample(target, SAMPLE)).rejects.toThrow()
+  expect(await readFile(mine, 'utf8')).toBe('my own words')
+})

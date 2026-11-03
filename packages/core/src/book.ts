@@ -1,4 +1,5 @@
-import { cp, mkdir, readdir, readFile, rename, stat } from 'node:fs/promises'
+import { constants } from 'node:fs'
+import { copyFile, mkdir, readdir, readFile, rename, stat } from 'node:fs/promises'
 import { join } from 'node:path'
 import { parse, stringify } from 'yaml'
 import { BookExistsError, ConflictError, InvalidIdError, InvalidInputError, NotABookError, NotFoundError } from './errors.ts'
@@ -54,6 +55,33 @@ function parseOrSkip<T>(path: string, parse: () => T): T | null {
   }
 }
 
+/** Every file under `dir`, as paths relative to it. */
+async function filesUnder(dir: string, rel = ''): Promise<string[]> {
+  const out: string[] = []
+  for (const e of await readdir(join(dir, rel), { withFileTypes: true })) {
+    const r = join(rel, e.name)
+    if (e.isDirectory()) out.push(...(await filesUnder(dir, r)))
+    else if (e.isFile()) out.push(r)
+  }
+  return out
+}
+
+/**
+ * Copies `src` into `dest` (which may exist) and never overwrites: if any file is already
+ * there, nothing is copied and BookExistsError is thrown. COPYFILE_EXCL guards a file that
+ * appears between the check and the copy.
+ */
+async function copyWithoutOverwrite(src: string, dest: string): Promise<void> {
+  const files = await filesUnder(src)
+  const clash: string[] = []
+  for (const f of files) if (await exists(join(dest, f))) clash.push(f)
+  if (clash.length) throw new BookExistsError(`Not copying the sample: ${clash.join(', ')} already exist in ${dest}`)
+  for (const f of files) {
+    await mkdir(join(dest, f, '..'), { recursive: true })
+    await copyFile(join(src, f), join(dest, f), constants.COPYFILE_EXCL)
+  }
+}
+
 async function readIfExists(path: string): Promise<string | null> {
   try {
     return await readFile(path, 'utf8')
@@ -106,8 +134,7 @@ export class Book {
 
   static async createFromSample(dir: string, sampleDir: string): Promise<Book> {
     if (await Book.isBook(dir)) throw new BookExistsError(`A book already exists in ${dir}`)
-    await mkdir(dir, { recursive: true })
-    await cp(sampleDir, dir, { recursive: true })
+    await copyWithoutOverwrite(sampleDir, dir)
     return Book.open(dir)
   }
 
