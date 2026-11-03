@@ -3,15 +3,21 @@ import { realpathSync } from 'node:fs'
 import { isAbsolute, relative } from 'node:path'
 import { createInterface } from 'node:readline'
 import type { AiEvent, AiProvider, AiRunInput, AiStatus } from './provider.ts'
+import { isSessionId } from './sessions.ts'
 
 export interface ClaudeCodeOptions {
   command?: string
   /** Arguments placed before the real ones (tests point `command` at node and this at a fake script). */
   commandArgs?: string[]
+  /** How long `claude auth status` may take before it counts as unresponsive. */
+  statusTimeoutMs?: number
 }
 
 const STATUS_TTL_MS = 60_000
+const STATUS_TIMEOUT_MS = 15_000
 const KILL_AFTER_MS = 3_000
+/** After the result line, Claude Code still writes its session file; give it this long to exit by itself. */
+const FLUSH_GRACE_MS = 5_000
 const STDERR_TAIL = 500
 const RATE_LIMIT_RE = /usage limit|rate limit|limit reached/i
 const READ_ONLY_TOOLS = ['Read', 'Grep', 'Glob']
@@ -22,17 +28,20 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null
 export class ClaudeCodeProvider implements AiProvider {
   private readonly command: string
   private readonly commandArgs: string[]
+  private readonly statusTimeoutMs: number
   private cached: { at: number; status: AiStatus } | null = null
 
   constructor(opts: ClaudeCodeOptions = {}) {
     this.command = opts.command ?? 'claude'
     this.commandArgs = opts.commandArgs ?? []
+    this.statusTimeoutMs = opts.statusTimeoutMs ?? STATUS_TIMEOUT_MS
   }
 
   async status(): Promise<AiStatus> {
     if (this.cached && Date.now() - this.cached.at < STATUS_TTL_MS) return this.cached.status
     const status = await this.readStatus()
-    this.cached = { at: Date.now(), status }
+    // Only a positive answer is cached: after `/login` or an install, the next check must see it.
+    this.cached = status.available ? { at: Date.now(), status } : null
     return status
   }
 
@@ -50,8 +59,8 @@ export class ClaudeCodeProvider implements AiProvider {
       })
       const timer = setTimeout(() => {
         child.kill('SIGKILL')
-        finish({ available: false, reason: 'not_logged_in' })
-      }, 15_000)
+        finish({ available: false, reason: 'unresponsive' })
+      }, this.statusTimeoutMs)
       child.stdout.setEncoding('utf8')
       child.stdout.on('data', (d: string) => (out += d))
       child.on('error', (err: NodeJS.ErrnoException) => {
@@ -99,7 +108,7 @@ export class ClaudeCodeProvider implements AiProvider {
       ...READ_ONLY_TOOLS,
       '--append-system-prompt',
       input.systemPrompt,
-      ...(input.resumeSessionId ? ['--resume', input.resumeSessionId] : []),
+      ...(isSessionId(input.resumeSessionId) ? [`--resume=${input.resumeSessionId}`] : []),
     ]
     const child = spawn(this.command, args, { cwd: input.cwd, stdio: ['pipe', 'pipe', 'pipe'] })
 
@@ -149,8 +158,8 @@ export class ClaudeCodeProvider implements AiProvider {
         }
         if (!isObj(msg)) continue
         for (const ev of this.translate(msg, input.cwd, (id) => (sessionId = id), () => sessionId)) {
-          yield ev
           if (ev.type === 'done' || ev.type === 'error') finished = true
+          yield ev
         }
         if (finished) break
       }
@@ -182,6 +191,12 @@ export class ClaudeCodeProvider implements AiProvider {
       // The child must never outlive the iterator (early `break`, abort, or error).
       signal.removeEventListener('abort', onAbort)
       rl.close()
+      if (finished && !signal.aborted) {
+        // A normal finish: let the CLI flush its session (needed for --resume) before stopping it.
+        let grace: NodeJS.Timeout | undefined
+        await Promise.race([exitCode, new Promise((r) => (grace = setTimeout(r, FLUSH_GRACE_MS)))])
+        clearTimeout(grace)
+      }
       terminate()
       await exitCode
       clearTimeout(killTimer)

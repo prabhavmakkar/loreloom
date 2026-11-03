@@ -3,10 +3,15 @@
 import { appendFileSync } from 'node:fs'
 
 const mode = process.env.FAKE_CLAUDE_MODE ?? 'ok'
+const SID = process.env.FAKE_CLAUDE_SID ?? '0b6f2c1e-4a8d-4e2b-9c3f-7d1a5e8b9f20'
 const argv = process.argv.slice(2)
 const out = (o) => process.stdout.write(`${JSON.stringify(o)}\n`)
 
 if (argv[0] === 'auth' && argv[1] === 'status') {
+  if (mode === 'hang-status') {
+    setInterval(() => {}, 1000)
+    await new Promise(() => {})
+  }
   out({ loggedIn: mode !== 'logged-out', subscriptionType: 'pro' })
   process.exit(0)
 }
@@ -24,9 +29,9 @@ process.stdin.on('end', () => {
     process.stderr.write('boom')
     process.exit(1)
   }
-  out({ type: 'system', subtype: 'init', session_id: 's1' })
+  out({ type: 'system', subtype: 'init', session_id: SID })
   if (mode === 'limit') {
-    out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude usage limit reached', session_id: 's1' })
+    out({ type: 'result', subtype: 'success', is_error: true, result: 'Claude usage limit reached', session_id: SID })
     process.exit(0)
   }
   if (mode === 'review') {
@@ -34,7 +39,20 @@ process.stdin.on('end', () => {
     const first = line({ quote: 'Kael melted the lock.', issue: 'Iron repels ember-magic', fix: 'Kael picked the lock.', category: 'continuity' })
     delta('Notes:\n```json\n' + first.slice(0, 30))
     delta(first.slice(30) + line({ quote: 'He ran.', issue: 'Flat', fix: '', category: 'prose' }).trimEnd())
-    out({ type: 'result', subtype: 'success', is_error: false, result: 'x', session_id: 's1' })
+    out({ type: 'result', subtype: 'success', is_error: false, result: 'x', session_id: SID })
+    return
+  }
+  if (mode === 'stale-resume' && argv.some((a) => a.startsWith('--resume'))) {
+    out({ type: 'result', subtype: 'error_during_execution', is_error: true, result: 'No conversation found with session ID' })
+    process.exit(1)
+  }
+  if (mode === 'flush') {
+    out({ type: 'result', subtype: 'success', is_error: false, result: 'x', session_id: SID })
+    // Claude Code writes its session file after the result line; a SIGTERM here would lose it.
+    setTimeout(() => {
+      appendFileSync(process.env.FAKE_CLAUDE_LOG, `${JSON.stringify({ flushed: true, pid: process.pid })}\n`)
+      process.exit(0)
+    }, 300)
     return
   }
   if (mode === 'slow') {
@@ -48,5 +66,5 @@ process.stdin.on('end', () => {
   delta('Hello')
   delta(' world')
   out({ type: 'rate_limit_event', rate_limit_info: {} })
-  out({ type: 'result', subtype: 'success', is_error: false, result: 'Hello world', session_id: 's1' })
+  out({ type: 'result', subtype: 'success', is_error: false, result: 'Hello world', session_id: SID })
 })

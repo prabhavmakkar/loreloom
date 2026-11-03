@@ -5,6 +5,10 @@ import type { AiMode } from './provider.ts'
 
 type Stored = 'brainstorm' | 'draft'
 const isStored = (m: AiMode): m is Stored => m === 'brainstorm' || m === 'draft'
+const SESSION_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Only real Claude Code session ids (UUIDs) are accepted, so a synced or hand-edited file can never inject CLI flags. */
+export const isSessionId = (id: unknown): id is string => typeof id === 'string' && SESSION_ID_RE.test(id)
 
 /** Remembers the Claude Code session per mode in `.loreloom/sessions.json`. Review is never stored. */
 export class SessionStore {
@@ -27,10 +31,11 @@ export class SessionStore {
   async get(mode: AiMode): Promise<string | undefined> {
     if (!isStored(mode)) return undefined
     const id = (await this.read())[mode]
-    return typeof id === 'string' ? id : undefined
+    return isSessionId(id) ? id : undefined
   }
 
   set(mode: AiMode, id: string): Promise<void> {
+    if (!isSessionId(id)) return Promise.resolve()
     return this.update(mode, id)
   }
 

@@ -6,6 +6,7 @@ import { ClaudeCodeProvider } from '../src/ai/claudeCode.ts'
 import { makeApp } from './helpers.ts'
 
 const FAKE = resolve(import.meta.dirname, 'fixtures', 'fake-claude.mjs')
+const SID = '0b6f2c1e-4a8d-4e2b-9c3f-7d1a5e8b9f20'
 
 async function setup(mode = 'ok') {
   const log = join(await mkdtemp(join(tmpdir(), 'loreloom-airoutes-')), 'log.jsonl')
@@ -49,19 +50,19 @@ describe('/api/ai', () => {
     expect(events.map((e) => e.type)).toEqual(['start', 'session', 'activity', 'text', 'text', 'done'])
     expect(typeof events[0].requestId).toBe('string')
     const stored = JSON.parse(await readFile(join(bookDir, '.loreloom', 'sessions.json'), 'utf8'))
-    expect(stored.brainstorm).toBe('s1')
+    expect(stored.brainstorm).toBe(SID)
 
     const [first] = await calls()
     expect(first!.stdin).toContain('\n\n## Request\nIdeas?')
-    expect(first!.argv).not.toContain('--resume')
+    expect(first!.argv.some((a) => a.startsWith('--resume'))).toBe(false)
 
     await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'More' })).text()
     const second = (await calls())[1]!
-    expect(second.argv.slice(second.argv.indexOf('--resume'), second.argv.indexOf('--resume') + 2)).toEqual(['--resume', 's1'])
+    expect(second.argv).toContain(`--resume=${SID}`)
     expect(second.stdin).toContain('## Request\nMore')
 
     await (await req('POST', '/api/ai/run', { mode: 'brainstorm', message: 'Fresh', newConversation: true })).text()
-    expect((await calls())[2]!.argv).not.toContain('--resume')
+    expect((await calls())[2]!.argv.some((a) => a.startsWith('--resume'))).toBe(false)
   })
 
   it('does not store review sessions', async () => {

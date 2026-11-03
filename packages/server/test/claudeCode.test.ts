@@ -6,18 +6,20 @@ import { ClaudeCodeProvider } from '../src/ai/claudeCode.ts'
 import type { AiEvent, AiRunInput } from '../src/ai/provider.ts'
 
 const FAKE = resolve(import.meta.dirname, 'fixtures', 'fake-claude.mjs')
+const SID = '0b6f2c1e-4a8d-4e2b-9c3f-7d1a5e8b9f20'
 
-async function setup(mode: string) {
+async function setup(mode: string, opts: { statusTimeoutMs?: number } = {}) {
   const dir = await mkdtemp(join(tmpdir(), 'loreloom-fake-'))
   const log = join(dir, 'log.jsonl')
   process.env.FAKE_CLAUDE_MODE = mode
   process.env.FAKE_CLAUDE_LOG = log
-  const provider = new ClaudeCodeProvider({ command: process.execPath, commandArgs: [FAKE] })
-  const calls = async (): Promise<{ argv: string[]; stdin: string; pid: number }[]> =>
+  const provider = new ClaudeCodeProvider({ command: process.execPath, commandArgs: [FAKE], ...opts })
+  const lines = async (): Promise<Record<string, unknown>[]> =>
     (await readFile(log, 'utf8').catch(() => ''))
       .split('\n')
       .filter(Boolean)
       .map((l) => JSON.parse(l))
+  const calls = async () => (await lines()).filter((l) => 'argv' in l) as { argv: string[]; stdin: string; pid: number }[]
   const input = (extra: Partial<AiRunInput> = {}): AiRunInput => ({
     mode: 'brainstorm',
     systemPrompt: 'SYS',
@@ -25,7 +27,7 @@ async function setup(mode: string) {
     cwd: dir,
     ...extra,
   })
-  return { provider, calls, input, dir }
+  return { provider, calls, lines, input, dir }
 }
 
 async function collect(it: AsyncIterable<AiEvent>): Promise<AiEvent[]> {
@@ -43,11 +45,11 @@ describe('ClaudeCodeProvider.run', () => {
   it('maps the stream to events', async () => {
     const { provider, input } = await setup('ok')
     expect(await collect(provider.run(input(), new AbortController().signal))).toEqual([
-      { type: 'session', sessionId: 's1' },
+      { type: 'session', sessionId: SID },
       { type: 'activity', text: 'Reading world/characters/kael.md' },
       { type: 'text', text: 'Hello' },
       { type: 'text', text: ' world' },
-      { type: 'done', sessionId: 's1' },
+      { type: 'done', sessionId: SID },
     ])
   })
 
@@ -68,11 +70,28 @@ describe('ClaudeCodeProvider.run', () => {
 
   it('resumes a session and skips persistence in review mode', async () => {
     const { provider, input, calls } = await setup('ok')
-    await collect(provider.run(input({ resumeSessionId: 's1' }), new AbortController().signal))
+    await collect(provider.run(input({ resumeSessionId: SID }), new AbortController().signal))
     await collect(provider.run(input({ mode: 'review' }), new AbortController().signal))
     const [first, second] = await calls()
-    expect(first!.argv.slice(first!.argv.indexOf('--resume'), first!.argv.indexOf('--resume') + 2)).toEqual(['--resume', 's1'])
+    // `--resume=<id>` keeps the id from ever being parsed as a flag of its own.
+    expect(first!.argv).toContain(`--resume=${SID}`)
+    expect(first!.argv).not.toContain('--resume')
     expect(second!.argv).toContain('--no-session-persistence')
+  })
+
+  it('never passes a non-UUID session id to the CLI', async () => {
+    const { provider, input, calls } = await setup('ok')
+    await collect(provider.run(input({ resumeSessionId: '--dangerously-skip-permissions' }), new AbortController().signal))
+    const [call] = await calls()
+    expect(call!.argv.some((a) => a.startsWith('--resume'))).toBe(false)
+    expect(call!.argv).not.toContain('--dangerously-skip-permissions')
+  })
+
+  it('lets the CLI exit on its own after the result, so the session is flushed', async () => {
+    const { provider, input, lines } = await setup('flush')
+    const events = await collect(provider.run(input(), new AbortController().signal))
+    expect(events.at(-1)).toMatchObject({ type: 'done' })
+    expect((await lines()).some((l) => l.flushed === true)).toBe(true)
   })
 
   it('reports a usage limit as rate_limited', async () => {
@@ -148,6 +167,18 @@ describe('ClaudeCodeProvider.status', () => {
   })
   it('available with the subscription type', async () => {
     const { provider } = await setup('ok')
+    expect(await provider.status()).toEqual({ available: true, subscriptionType: 'pro' })
+  })
+  it('does not cache an unavailable answer', async () => {
+    const { provider } = await setup('logged-out')
+    expect(await provider.status()).toEqual({ available: false, reason: 'not_logged_in' })
+    process.env.FAKE_CLAUDE_MODE = 'ok'
+    expect(await provider.status()).toEqual({ available: true, subscriptionType: 'pro' })
+  })
+  it('reports a status timeout as unresponsive (not logged out) and does not cache it', async () => {
+    const { provider } = await setup('hang-status', { statusTimeoutMs: 300 })
+    expect(await provider.status()).toEqual({ available: false, reason: 'unresponsive' })
+    process.env.FAKE_CLAUDE_MODE = 'ok'
     expect(await provider.status()).toEqual({ available: true, subscriptionType: 'pro' })
   })
   it('caches for 60 seconds', async () => {

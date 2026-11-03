@@ -3,6 +3,7 @@ import type { RunError } from './stream.ts'
 
 export const NOT_INSTALLED = "Loreloom's helper runs on Claude Code. Install it from https://code.claude.com, then reload."
 export const NOT_LOGGED_IN = 'Open a terminal and run `claude`, then `/login`.'
+export const UNRESPONSIVE = "Claude Code didn't answer in time. Check that `claude` starts in a terminal, then try again."
 export const RATE_LIMITED = "You've reached your Claude usage limit for now. It resets after a while; your writing is unaffected."
 
 /** Inline `code`, **bold** and *italic*, built as elements so model output is never parsed as HTML. */

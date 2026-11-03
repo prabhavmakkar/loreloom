@@ -6,7 +6,7 @@ import type { EditorHandle } from '../editor/handle.ts'
 import { useBook } from '../state/BookContext.tsx'
 import { BrainstormTab } from './BrainstormTab.tsx'
 import { DraftTab } from './DraftTab.tsx'
-import { NOT_INSTALLED, NOT_LOGGED_IN } from './parts.tsx'
+import { NOT_INSTALLED, NOT_LOGGED_IN, UNRESPONSIVE } from './parts.tsx'
 import { ReviewTab } from './ReviewTab.tsx'
 
 const TABS = ['Brainstorm', 'Draft', 'Review'] as const
@@ -32,7 +32,7 @@ export function HelperPanel({ editor }: { editor: RefObject<EditorHandle | null>
     return (
       <div className="helper-panel">
         <div className="helper-notice" role="alert">
-          <p>{status.reason === 'not_installed' ? NOT_INSTALLED : NOT_LOGGED_IN}</p>
+          <p>{status.reason === 'not_installed' ? NOT_INSTALLED : status.reason === 'unresponsive' ? UNRESPONSIVE : NOT_LOGGED_IN}</p>
           <button type="button" className="small" onClick={check}>
             Check again
           </button>

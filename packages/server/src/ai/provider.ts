@@ -1,6 +1,6 @@
 export type AiMode = 'brainstorm' | 'draft' | 'review'
 export type AiErrorCode = 'not_installed' | 'not_logged_in' | 'rate_limited' | 'cancelled' | 'failed'
-export type AiStatus = { available: boolean; reason?: 'not_installed' | 'not_logged_in'; subscriptionType?: string }
+export type AiStatus = { available: boolean; reason?: 'not_installed' | 'not_logged_in' | 'unresponsive'; subscriptionType?: string }
 export type ReviewCategory = 'prose' | 'pacing' | 'continuity' | 'dialogue'
 export interface ReviewSuggestion {
   id: string
