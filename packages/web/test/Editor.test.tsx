@@ -59,6 +59,10 @@ describe('<Editor>', () => {
   })
 
   it('asks the book for a refresh after a successful save, so the word count follows the writing', async () => {
+    // jsdom has no layout; ProseMirror's scroll-into-view after an edit needs these.
+    const proto = Range.prototype as unknown as Record<string, unknown>
+    proto.getClientRects ??= () => []
+    proto.getBoundingClientRect ??= () => new DOMRect()
     const ref = createRef<EditorHandle>()
     act(() => root.render(<Editor key="one" ref={ref} chapterId="one" />))
     await settle()
