@@ -61,6 +61,8 @@ export class Book {
   private readonly written = new Map<string, string>()
   /** Chapter read-modify-write operations run one at a time, so none overwrites another's changes. */
   private chapterLock: Promise<unknown> = Promise.resolve()
+  /** The same for cards: a relationship edit must never clobber a body saved at the same moment. */
+  private cardLock: Promise<unknown> = Promise.resolve()
 
   private constructor(dir: string, meta: BookMeta) {
     this.dir = dir
@@ -172,7 +174,11 @@ export class Book {
     return this.chapterFromText(id, text)
   }
 
-  async createChapter(input: { title: string }): Promise<Chapter> {
+  createChapter(input: { title: string }): Promise<Chapter> {
+    return this.serialChapters(() => this.createChapterNow(input))
+  }
+
+  private async createChapterNow(input: { title: string }): Promise<Chapter> {
     const existing = await this.listChapters()
     const id = uniqueSlug(slugify(input.title), new Set(existing.map((c) => c.id)))
     const order = existing.reduce((m, c) => Math.max(m, c.order), 0) + 1
@@ -198,7 +204,11 @@ export class Book {
     return this.writeChapter({ ...rest, ...pickChapterPatch(patch) })
   }
 
-  async deleteChapter(id: string): Promise<void> {
+  deleteChapter(id: string): Promise<void> {
+    return this.serialChapters(() => this.deleteChapterNow(id))
+  }
+
+  private async deleteChapterNow(id: string): Promise<void> {
     await this.getChapter(id)
     await this.trash(this.chapterPath(id), `${id}.md`)
   }
@@ -301,10 +311,17 @@ export class Book {
     return this.cardFromText(kind, id, text)
   }
 
-  async createCard(
-    kind: CardKind,
-    input: { name: string; summary?: string; aliases?: string[] },
-  ): Promise<Card> {
+  private serialCards<T>(op: () => Promise<T>): Promise<T> {
+    const run = this.cardLock.then(op, op)
+    this.cardLock = run.catch(() => undefined)
+    return run
+  }
+
+  createCard(kind: CardKind, input: { name: string; summary?: string; aliases?: string[] }): Promise<Card> {
+    return this.serialCards(() => this.createCardNow(kind, input))
+  }
+
+  private async createCardNow(kind: CardKind, input: { name: string; summary?: string; aliases?: string[] }): Promise<Card> {
     checkKind(kind)
     const existing = await this.listCards(kind)
     const id = uniqueSlug(slugify(input.name), new Set(existing.map((c) => c.id)))
@@ -320,7 +337,12 @@ export class Book {
     })
   }
 
-  async saveCard(kind: CardKind, id: string, patch: CardPatch, baseVersion?: string): Promise<Card> {
+  saveCard(kind: CardKind, id: string, patch: CardPatch, baseVersion?: string): Promise<Card> {
+    return this.serialCards(() => this.saveCardNow(kind, id, patch, baseVersion))
+  }
+
+  // The `*Now` variants assume the card lock is held; they call each other, never the locked ones.
+  private async saveCardNow(kind: CardKind, id: string, patch: CardPatch, baseVersion?: string): Promise<Card> {
     const current = await this.getCard(kind, id)
     if (baseVersion !== undefined && baseVersion !== current.version) {
       throw new ConflictError(`${kind} ${id} changed on disk`, current)
@@ -329,29 +351,41 @@ export class Book {
     return this.writeCard({ ...rest, ...pickCardPatch(patch) })
   }
 
-  async deleteCard(kind: CardKind, id: string): Promise<void> {
+  deleteCard(kind: CardKind, id: string): Promise<void> {
+    return this.serialCards(() => this.deleteCardNow(kind, id))
+  }
+
+  private async deleteCardNow(kind: CardKind, id: string): Promise<void> {
     await this.getCard(kind, id)
     await this.trash(this.cardPath(kind, id), `${kind}-${id}.md`)
     if (kind !== 'character') return
     for (const c of await this.listCards('character')) {
       if (c.relationships.some((r) => r.to === id)) {
-        await this.saveCard('character', c.id, { relationships: c.relationships.filter((r) => r.to !== id) })
+        await this.saveCardNow('character', c.id, { relationships: c.relationships.filter((r) => r.to !== id) })
       }
     }
   }
 
-  async addRelationship(fromId: string, rel: Relationship): Promise<Card> {
+  addRelationship(fromId: string, rel: Relationship): Promise<Card> {
+    return this.serialCards(() => this.addRelationshipNow(fromId, rel))
+  }
+
+  private async addRelationshipNow(fromId: string, rel: Relationship): Promise<Card> {
     checkId(fromId)
     checkId(rel.to)
     const from = await this.getCard('character', fromId)
     await this.getCard('character', rel.to)
     if (from.relationships.some((r) => r.to === rel.to && r.kind === rel.kind)) return from
-    return this.saveCard('character', fromId, { relationships: [...from.relationships, rel] })
+    return this.saveCardNow('character', fromId, { relationships: [...from.relationships, rel] })
   }
 
-  async removeRelationship(fromId: string, rel: { to: string; kind: string }): Promise<Card> {
+  removeRelationship(fromId: string, rel: { to: string; kind: string }): Promise<Card> {
+    return this.serialCards(() => this.removeRelationshipNow(fromId, rel))
+  }
+
+  private async removeRelationshipNow(fromId: string, rel: { to: string; kind: string }): Promise<Card> {
     const from = await this.getCard('character', fromId)
-    return this.saveCard('character', fromId, {
+    return this.saveCardNow('character', fromId, {
       relationships: from.relationships.filter((r) => !(r.to === rel.to && r.kind === rel.kind)),
     })
   }

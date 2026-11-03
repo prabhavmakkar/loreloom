@@ -1,7 +1,7 @@
-import { mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { beforeEach, expect, test } from 'vitest'
+import { beforeEach, expect, test, vi } from 'vitest'
 import {
   Book,
   BookExistsError,
@@ -200,4 +200,13 @@ test('a body saved while a reorder runs survives it', async () => {
   const got = await book.getChapter(a.id)
   expect(got.body).toBe('kept text')
   expect(got.order).toBe(2)
+})
+
+test('a concurrent card save and relationship edit keep both changes', async () => {
+  const kael = await book.createCard('character', { name: 'Kael' })
+  await book.createCard('character', { name: 'Mira' })
+  await Promise.all([book.saveCard('character', kael.id, { body: 'new body' }, kael.version), book.addRelationship(kael.id, { to: 'mira', kind: 'ally' })])
+  const after = await book.getCard('character', kael.id)
+  expect(after.body).toBe('new body')
+  expect(after.relationships).toEqual([{ to: 'mira', kind: 'ally' }])
 })
