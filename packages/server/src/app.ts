@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { serveStatic } from '@hono/node-server/serve-static'
 import {
   Book,
@@ -133,7 +133,8 @@ export function createApp(opts: AppOptions): { app: Hono; getBook(): Book | null
   // ---- book ----
   app.get('/api/book', async (c) => {
     const b = await ensureBook()
-    return c.json(b ? { exists: true, meta: b.meta } : { exists: false })
+    // bookId: a stable short hash of the folder, so the browser keeps each book's unsaved drafts apart.
+    return c.json(b ? { exists: true, meta: b.meta, bookId: createHash('sha256').update(b.dir).digest('hex').slice(0, 12) } : { exists: false })
   })
 
   app.post('/api/book', async (c) => {

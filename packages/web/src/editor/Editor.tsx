@@ -94,7 +94,7 @@ interface EditorProps {
  * Every keystroke goes to localStorage at once and to disk after a short pause.
  */
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ chapterId, onSaveState }, ref) {
-  const { cards, refreshSoon } = useBook()
+  const { cards, refreshSoon, bookId } = useBook()
   const cardsRef = useRef(cards)
   cardsRef.current = cards
   const refreshSoonRef = useRef(refreshSoon)
@@ -151,7 +151,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
     const me = {}
     reporter = me
     const storage = localStore()
-    const key = `chapter:${chapterId}`
+    const key = `${bookId ?? ''}:chapter:${chapterId}` // per book: a sample-book draft never restores into another book
     const q = createSaveQueue<Draft>({
       key,
       save: async (d) => {
@@ -229,7 +229,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
         if (closing.get(chapterId) === done) closing.delete(chapterId)
       })
     }
-  }, [editor, chapterId, loadTick, showDiskBody])
+  }, [editor, chapterId, bookId, loadTick, showDiskBody])
 
   // Outside changes: reload silently when clean; when dirty, try to save, which surfaces a
   // conflict (409) if the file really changed.

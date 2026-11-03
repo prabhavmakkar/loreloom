@@ -5,6 +5,17 @@ import type { Res } from './helpers.ts'
 import { makeApp, SAMPLE_DIR } from './helpers.ts'
 
 describe('book lifecycle', () => {
+  it('gives each book folder a stable, distinct bookId (namespaces unsaved drafts in the browser)', async () => {
+    const a = await makeApp()
+    await a.req('POST', '/api/book', { sample: true })
+    const first = await (await a.req('GET', '/api/book')).json()
+    expect(first.bookId).toMatch(/^[0-9a-f]{12}$/)
+    expect((await (await a.req('GET', '/api/book')).json()).bookId).toBe(first.bookId)
+    const b = await makeApp()
+    await b.req('POST', '/api/book', { sample: true })
+    expect((await (await b.req('GET', '/api/book')).json()).bookId).not.toBe(first.bookId)
+  })
+
   it('reports no book, then creates the sample', async () => {
     const { req, getBook } = await makeApp()
     expect(await (await req('GET', '/api/book')).json()).toEqual({ exists: false })

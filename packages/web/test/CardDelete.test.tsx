@@ -19,7 +19,7 @@ vi.mock('../src/api.ts', async (orig) => {
 })
 vi.mock('../src/state/BookContext.tsx', () => ({
   CARD_KINDS: ['character', 'place', 'rule', 'term'],
-  useBook: () => ({ cards: { character: [], place: [], rule: [], term: [] }, refresh: async () => {}, refreshSoon: () => {} }),
+  useBook: () => ({ bookId: 'b1', cards: { character: [], place: [], rule: [], term: [] }, refresh: async () => {}, refreshSoon: () => {} }),
 }))
 
 const api = await import('../src/api.ts')
@@ -57,7 +57,7 @@ it('a failed delete keeps the unsaved draft and shows an error', async () => {
   expect(api.deleteCard).toHaveBeenCalled()
   expect(onGone).not.toHaveBeenCalled()
   expect(host.textContent).toContain('Could not delete')
-  expect(JSON.parse(localStorage.getItem('loreloom:unsaved:card:term:x')!).value.body).toBe('new text')
+  expect(JSON.parse(localStorage.getItem('loreloom:unsaved:b1:card:term:x')!).value.body).toBe('new text')
 })
 
 it('keeps edits made while the name is blank, and never saves a blank name', async () => {
@@ -71,7 +71,7 @@ it('keeps edits made while the name is blank, and never saves a blank name', asy
     })
   await setValue(host.querySelector<HTMLInputElement>('.card-name')!, '')
   await setValue(host.querySelector<HTMLTextAreaElement>('#card-body')!, 'typed while nameless')
-  expect(JSON.parse(localStorage.getItem('loreloom:unsaved:card:term:x')!).value.body).toBe('typed while nameless')
+  expect(JSON.parse(localStorage.getItem('loreloom:unsaved:b1:card:term:x')!).value.body).toBe('typed while nameless')
   act(() => root.unmount())
   await settle()
   expect(api.saveCard).toHaveBeenCalled()

@@ -6,7 +6,7 @@ export type { AiErrorCode, AiEvent, AiMode, AiStatus, ReviewCategory, ReviewSugg
 
 export type BookMeta = Book['meta']
 export type ChapterSummary = Omit<Chapter, 'body'>
-export type BookInfo = { exists: false } | { exists: true; meta: BookMeta }
+export type BookInfo = { exists: false } | { exists: true; meta: BookMeta; bookId: string }
 
 export class ApiError extends Error {
   readonly status: number

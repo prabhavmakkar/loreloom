@@ -13,7 +13,7 @@ const TABS = ['Brainstorm', 'Draft', 'Review'] as const
 type Tab = (typeof TABS)[number]
 
 export function HelperPanel({ editor }: { editor: RefObject<EditorHandle | null> }) {
-  const { currentChapterId, meta } = useBook()
+  const { currentChapterId, bookId } = useBook()
   const [tab, setTab] = useState<Tab>('Brainstorm')
   const [status, setStatus] = useState<AiStatus | null>(null)
 
@@ -41,7 +41,7 @@ export function HelperPanel({ editor }: { editor: RefObject<EditorHandle | null>
     )
   }
 
-  const bookKey = meta?.title ?? ''
+  const bookKey = bookId ?? ''
   return (
     <div className="helper-panel">
       <div className="helper-tabs" role="tablist" aria-label="Helper">

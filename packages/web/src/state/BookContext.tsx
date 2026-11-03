@@ -19,6 +19,8 @@ export interface BookState {
   error: string | null
   exists: boolean
   meta: BookMeta | null
+  /** Stable per book folder; prefixes what the browser stores for this book. */
+  bookId: string | null
   stats: BookStats | null
   chapters: ChapterSummary[]
   cards: Record<CardKind, Card[]>
@@ -50,6 +52,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null)
   const [exists, setExists] = useState(false)
   const [meta, setMeta] = useState<BookMeta | null>(null)
+  const [bookId, setBookId] = useState<string | null>(null)
   const [stats, setStats] = useState<BookStats | null>(null)
   const [chapters, setChapters] = useState<ChapterSummary[]>([])
   const [cards, setCards] = useState<Record<CardKind, Card[]>>(emptyCards)
@@ -68,6 +71,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       if (!info.exists) {
         setExists(false)
         setMeta(null)
+        setBookId(null)
         setStats(null)
         setChapters([])
         setCards(emptyCards())
@@ -80,6 +84,7 @@ export function BookProvider({ children }: { children: ReactNode }) {
       for (const c of all) grouped[c.kind].push(c)
       setExists(true)
       setMeta(info.meta)
+      setBookId(info.bookId)
       setStats(st)
       setChapters(chs)
       setCards(grouped)
@@ -115,8 +120,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, [chapters, loaded])
 
   const value = useMemo<BookState>(
-    () => ({ loaded, error, exists, meta, stats, chapters, cards, currentChapterId, setCurrentChapterId, view, setView, world, setWorld, refresh, refreshSoon }),
-    [loaded, error, exists, meta, stats, chapters, cards, currentChapterId, view, world, refresh, refreshSoon],
+    () => ({ loaded, error, exists, meta, bookId, stats, chapters, cards, currentChapterId, setCurrentChapterId, view, setView, world, setWorld, refresh, refreshSoon }),
+    [loaded, error, exists, meta, bookId, stats, chapters, cards, currentChapterId, view, world, refresh, refreshSoon],
   )
   return <BookContext.Provider value={value}>{children}</BookContext.Provider>
 }

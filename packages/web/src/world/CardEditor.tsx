@@ -211,7 +211,7 @@ interface CardEditorProps {
 
 /** Mount with `key={kind:id}`: unmounting flushes the save. Autosaves like the chapter editor. */
 export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
-  const { refresh, refreshSoon } = useBook()
+  const { refresh, refreshSoon, bookId } = useBook()
   const refreshSoonRef = useRef(refreshSoon)
   refreshSoonRef.current = refreshSoon
   const onSaveStateRef = useRef(onSaveState)
@@ -245,7 +245,7 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
     const me = {}
     reporter = me
     const storage = localStore()
-    const key = `card:${kind}:${id}`
+    const key = `${bookId ?? ''}:card:${kind}:${id}` // per book, like the chapter editor
     const q = createSaveQueue<Draft>({
       key,
       save: async (d) => {
@@ -320,7 +320,7 @@ export function CardEditor({ kind, id, onSaveState, onGone }: CardEditorProps) {
       })
       if (reporter === me) onSaveStateRef.current?.(null)
     }
-  }, [kind, id, loadTick, show])
+  }, [kind, id, bookId, loadTick, show])
 
   // Outside changes: reload silently when clean; when dirty, saving surfaces a 409 if it really changed.
   const onOutsideChange = useCallback(async () => {
