@@ -19,7 +19,7 @@ vi.mock('../src/api.ts', async (orig) => {
 })
 vi.mock('../src/state/BookContext.tsx', () => ({
   CARD_KINDS: ['character', 'place', 'rule', 'term'],
-  useBook: () => ({ cards: { character: [], place: [], rule: [], term: [] }, refresh: async () => {} }),
+  useBook: () => ({ cards: { character: [], place: [], rule: [], term: [] }, refresh: async () => {}, refreshSoon: () => {} }),
 }))
 
 const api = await import('../src/api.ts')

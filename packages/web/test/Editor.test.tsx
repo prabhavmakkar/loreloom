@@ -14,9 +14,10 @@ vi.mock('../src/api.ts', async (orig) => {
     subscribeChanges: vi.fn(() => () => {}),
   }
 })
+const refreshSoon = vi.fn()
 vi.mock('../src/state/BookContext.tsx', () => ({
   CARD_KINDS: ['character', 'place', 'rule', 'term'],
-  useBook: () => ({ cards: { character: [], place: [], rule: [], term: [] } }),
+  useBook: () => ({ cards: { character: [], place: [], rule: [], term: [] }, refreshSoon }),
 }))
 
 const api = await import('../src/api.ts')
@@ -42,6 +43,17 @@ afterEach(() => {
 const settle = () => act(async () => void (await new Promise((r) => setTimeout(r, 20))))
 
 describe('<Editor>', () => {
+  it('asks the book for a refresh after a successful save, so the word count follows the writing', async () => {
+    const ref = createRef<EditorHandle>()
+    act(() => root.render(<Editor key="one" ref={ref} chapterId="one" />))
+    await settle()
+    act(() => ref.current!.insertAtCursor('More words.'))
+    expect(refreshSoon).not.toHaveBeenCalled()
+    await act(async () => void (await new Promise((r) => setTimeout(r, 1500))))
+    expect(api.saveChapter).toHaveBeenCalled()
+    expect(refreshSoon).toHaveBeenCalled()
+  })
+
   it('opens a chapter with content it cannot represent read-only, and never saves it', async () => {
     const lossy = 'Kael.\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\n<!-- TODO -->'
     vi.mocked(api.getChapter).mockResolvedValueOnce({ ...chapter, body: lossy })

@@ -29,7 +29,11 @@ export interface BookState {
   world: WorldSelection
   setWorld(w: WorldSelection): void
   refresh(): Promise<void>
+  /** A refresh a couple of seconds from now; calls in between fold into one (for counts while writing). */
+  refreshSoon(): void
 }
+
+const REFRESH_SOON_MS = 2000
 
 const emptyCards = (): Record<CardKind, Card[]> => ({ character: [], place: [], rule: [], term: [] })
 
@@ -92,6 +96,14 @@ export function BookProvider({ children }: { children: ReactNode }) {
     void refresh()
   }, [refresh])
 
+  // Our own saves are not echoed by the watcher, so the editors ask for this after each one.
+  const soonTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
+  const refreshSoon = useCallback(() => {
+    clearTimeout(soonTimer.current)
+    soonTimer.current = setTimeout(() => void refresh(), REFRESH_SOON_MS)
+  }, [refresh])
+  useEffect(() => () => clearTimeout(soonTimer.current), [])
+
   // Every change event (including echoes of our own deletes) just means "refetch";
   // so does a reconnect, since changes made while disconnected are never replayed.
   useEffect(() => (exists ? api.subscribeChanges(() => void refresh(), () => void refresh()) : undefined), [exists, refresh])
@@ -103,8 +115,8 @@ export function BookProvider({ children }: { children: ReactNode }) {
   }, [chapters, loaded])
 
   const value = useMemo<BookState>(
-    () => ({ loaded, error, exists, meta, stats, chapters, cards, currentChapterId, setCurrentChapterId, view, setView, world, setWorld, refresh }),
-    [loaded, error, exists, meta, stats, chapters, cards, currentChapterId, view, world, refresh],
+    () => ({ loaded, error, exists, meta, stats, chapters, cards, currentChapterId, setCurrentChapterId, view, setView, world, setWorld, refresh, refreshSoon }),
+    [loaded, error, exists, meta, stats, chapters, cards, currentChapterId, view, world, refresh, refreshSoon],
   )
   return <BookContext.Provider value={value}>{children}</BookContext.Provider>
 }

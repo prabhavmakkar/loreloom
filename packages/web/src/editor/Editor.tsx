@@ -92,9 +92,11 @@ interface EditorProps {
  * Every keystroke goes to localStorage at once and to disk after a short pause.
  */
 export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ chapterId, onSaveState }, ref) {
-  const { cards } = useBook()
+  const { cards, refreshSoon } = useBook()
   const cardsRef = useRef(cards)
   cardsRef.current = cards
+  const refreshSoonRef = useRef(refreshSoon)
+  refreshSoonRef.current = refreshSoon
   const onSaveStateRef = useRef(onSaveState)
   onSaveStateRef.current = onSaveState
 
@@ -153,6 +155,7 @@ export const Editor = forwardRef<EditorHandle, EditorProps>(function Editor({ ch
       save: async (d) => {
         const saved = await api.saveChapter(chapterId, { body: d.body }, baseRef.current)
         baseRef.current = saved.version
+        refreshSoonRef.current() // page and word counts
       },
       isConflict: conflictOf,
       storage,
