@@ -10,13 +10,31 @@ A local, open-source novel-writing app for fantasy writers. You write in plain M
 - **Build your world** with cards for characters, places, rules and glossary terms, plus a relationship map.
 - **Brainstorm, draft and review** with a helper that reads your cards and chapters. It never edits your chapters on its own: only your click on Insert, Replace or Apply changes your text.
 
-## Requirements
+## Install (for writers)
+
+**Website and step-by-step guide: https://getloreloom.vercel.app**
+
+On a Mac or Linux, open Terminal and paste:
+
+```sh
+curl -fsSL https://getloreloom.vercel.app/install.sh | bash
+```
+
+On Windows (preview), open PowerShell and paste:
+
+```powershell
+irm https://getloreloom.vercel.app/install.ps1 | iex
+```
+
+The installer sets everything up inside your user folder (no admin password), adds a Loreloom app you can open from Spotlight or the Start menu, and optionally installs Claude Code for the AI helper. Run it again to update. The installers live in [`site/`](site/) if you want to read them first.
+
+## Requirements (developers)
 
 - Node 22 or newer.
 - Claude Code installed and signed in. Run `claude`, then `/login` in a terminal. See https://code.claude.com.
 - A Claude plan. (An API-key option is on the roadmap.)
 
-## Quick start
+## Quick start (developers)
 
 ```sh
 git clone https://github.com/prabhavmakkar/loreloom.git

@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Loreloom: free writing software for novelists</title>
+<meta name="description" content="Loreloom is free, open-source writing software for novelists. Chapters, page counts, a character map, a dictionary for your world, and an AI helper. Runs on your laptop; your book never leaves it.">
+<meta property="og:title" content="Loreloom: free writing software for novelists">
+<meta property="og:description" content="Write your novel on your own laptop. Free forever, open source, and your book never leaves your computer.">
+<meta property="og:image" content="https://getloreloom.vercel.app/img/write.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Alegreya:ital,wght@0,400;0,500;0,700;1,400&family=Alegreya+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --night: #18203a;
+  --night-2: #222c4c;
+  --page: #eff0ea;
+  --page-2: #e4e6dd;
+  --ink: #1d2236;
+  --muted: #555b6e;
+  --rule: #c8cbc0;
+  --thread: #c9952a;
+  --thread-soft: #e6c46e;
+  --on-night: #ecebe4;
+  --on-night-muted: #a9aec2;
+  --serif: "Alegreya", Georgia, serif;
+  --sans: "Alegreya Sans", system-ui, sans-serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #141a2e; --page-2: #1c2440; --ink: #e8e6de; --muted: #a3a9bd;
+    --rule: #323b5c; --thread: #e0b24c; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #141a2e; --page-2: #1c2440; --ink: #e8e6de; --muted: #a3a9bd;
+  --rule: #323b5c; --thread: #e0b24c; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 400 1.125rem/1.6 var(--sans);
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; height: auto; display: block; }
+a { color: inherit; text-decoration-color: var(--thread); text-underline-offset: .2em; text-decoration-thickness: 2px; }
+a:hover { text-decoration-color: currentColor; }
+:focus-visible { outline: 3px solid var(--thread); outline-offset: 3px; border-radius: 4px; }
+h1, h2, h3 { font-family: var(--serif); font-weight: 500; line-height: 1.1; margin: 0; }
+p { margin: 0 0 1em; }
+.wrap { width: min(1120px, 100% - 32px); margin-inline: auto; }
+
+/* ---------- top bar ---------- */
+.top { background: var(--night); color: var(--on-night); }
+.top .wrap { display: flex; align-items: center; gap: 24px; padding: 18px 0; }
+.brand { display: flex; align-items: center; gap: 10px; font: 500 1.35rem var(--serif); text-decoration: none; }
+.brand img { width: 30px; height: 30px; border-radius: 7px; }
+.top nav { margin-left: auto; display: flex; gap: 22px; font-size: 1rem; }
+.top nav a { text-decoration: none; color: var(--on-night-muted); }
+.top nav a:hover { color: var(--on-night); }
+@media (max-width: 640px) { .top nav a:not(.gh) { display: none; } }
+
+/* ---------- hero ---------- */
+.hero { background: var(--night); color: var(--on-night); padding: 56px 0 0; overflow: hidden; }
+.hero h1 { font-size: clamp(2.75rem, 7.2vw, 5.75rem); letter-spacing: -0.015em; }
+.hero .thread { display: block; width: min(560px, 90%); height: 34px; margin: 18px 0 26px; overflow: visible; }
+.hero .thread path { fill: none; stroke: var(--thread-soft); stroke-width: 2.5; stroke-linecap: round; }
+.hero .thread .draw { stroke-dasharray: 580; stroke-dashoffset: 580; animation: weave 2.2s .3s cubic-bezier(.6,.1,.2,1) forwards; }
+@keyframes weave { to { stroke-dashoffset: 0; } }
+.hero .lede { font-size: clamp(1.15rem, 2vw, 1.35rem); max-width: 34em; color: var(--on-night); opacity: .92; }
+.ctas { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; margin: 30px 0 14px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px; padding: 14px 22px; border-radius: 999px;
+  font: 700 1.05rem var(--sans); text-decoration: none; border: 2px solid transparent; cursor: pointer;
+}
+.btn.gold { background: var(--thread-soft); color: #1d1a10; }
+.btn.gold:hover { background: #f0d58a; }
+.btn.line { border-color: #4a5577; color: var(--on-night); }
+.btn.line:hover { border-color: var(--on-night-muted); }
+.fine { font-size: .95rem; color: var(--on-night-muted); }
+.window {
+  margin-top: 54px; border-radius: 14px 14px 0 0; overflow: hidden;
+  box-shadow: 0 -2px 0 #2b3557, 0 30px 80px rgba(0,0,0,.45);
+  background: #f4efe6;
+}
+.window .bar { display: flex; gap: 7px; padding: 11px 14px; background: #e6dfd2; }
+.window .bar i { width: 11px; height: 11px; border-radius: 50%; background: #c8bfb0; }
+
+/* ---------- threaded sections ---------- */
+.story { position: relative; padding: 40px 0 24px; }
+@media (min-width: 900px) {
+  .story::before {
+    content: ""; position: absolute; top: 0; bottom: 0; left: max(16px, calc(50% - 560px + 12px));
+    width: 2px; background: linear-gradient(var(--thread), var(--thread)) center / 2px 100% no-repeat; opacity: .55;
+  }
+  .knot { position: relative; padding-left: 64px; }
+  .knot::before {
+    content: ""; position: absolute; left: 4px; top: .45em; width: 18px; height: 18px; border-radius: 50%;
+    background: var(--page); border: 2.5px solid var(--thread);
+  }
+}
+section.part { padding-block: 64px; }
+section.part + section.part { border-top: 1px solid var(--rule); }
+.part h2 { font-size: clamp(2rem, 4vw, 3rem); max-width: 24ch; margin-bottom: 18px; }
+.part .intro { max-width: 36em; color: var(--muted); font-size: 1.2rem; }
+
+/* features */
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 34px 40px; margin-top: 40px; }
+.features h3 { font-size: 1.45rem; margin-bottom: 8px; }
+.features p { color: var(--muted); margin: 0; }
+.shot { margin-top: 48px; border-radius: 12px; overflow: hidden; border: 1px solid var(--rule); box-shadow: 0 18px 50px rgba(24,32,58,.14); }
+.caption { font-size: .95rem; color: var(--muted); margin-top: 12px; }
+
+/* promises */
+.promises { margin: 34px 0 0; padding: 0; list-style: none; max-width: 44em; }
+.promises li { padding: 18px 0; border-bottom: 1px solid var(--rule); display: grid; grid-template-columns: 1fr; gap: 4px; }
+.promises li:last-child { border-bottom: 0; }
+.promises strong { font: 500 1.3rem var(--serif); }
+.promises span { color: var(--muted); }
+
+/* cost */
+.cost { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 36px; max-width: 900px; }
+.cost div { padding: 26px 28px; border-radius: 12px; background: var(--page-2); }
+.cost .price { font: 500 2.4rem/1 var(--serif); margin: 6px 0 12px; color: var(--ink); }
+.cost h3 { font: 700 1.05rem var(--sans); }
+.cost p { color: var(--muted); margin: 0; }
+
+/* install */
+.install { background: var(--night); color: var(--on-night); padding: 72px 0 80px; }
+.install h2 { font-size: clamp(2rem, 4vw, 3rem); margin-bottom: 12px; }
+.install .intro { color: var(--on-night-muted); max-width: 36em; font-size: 1.2rem; }
+.tabs { display: flex; gap: 6px; margin: 30px 0 0; flex-wrap: wrap; }
+.tabs button {
+  font: 500 1rem var(--sans); color: var(--on-night-muted); background: transparent;
+  border: 1px solid #3a4568; border-radius: 999px; padding: 8px 18px; cursor: pointer;
+}
+.tabs button[aria-selected="true"] { background: var(--on-night); color: var(--night); border-color: var(--on-night); }
+.panel { margin-top: 30px; max-width: 760px; }
+.panel[hidden] { display: none; }
+.steps { list-style: none; counter-reset: s; margin: 0; padding: 0; }
+.steps > li { counter-increment: s; position: relative; padding: 0 0 30px 58px; }
+.steps > li::before {
+  content: counter(s); position: absolute; left: 0; top: -2px; width: 38px; height: 38px; border-radius: 50%;
+  display: grid; place-items: center; font: 500 1.2rem var(--serif); color: var(--night); background: var(--thread-soft);
+}
+.steps > li:not(:last-child)::after { content: ""; position: absolute; left: 18px; top: 42px; bottom: 6px; width: 2px; background: #3a4568; }
+.steps h3 { font: 700 1.15rem var(--sans); margin-bottom: 4px; }
+.steps p { color: var(--on-night-muted); margin: 0; }
+kbd { font: 600 .9em var(--sans); padding: 1px 7px; border-radius: 5px; border: 1px solid #4a5577; border-bottom-width: 2px; color: var(--on-night); }
+.cmd { display: flex; align-items: stretch; margin-top: 12px; border-radius: 10px; overflow: hidden; border: 1px solid #3a4568; background: #0f1528; }
+.cmd code { flex: 1; padding: 14px 16px; font: 500 .98rem/1.4 var(--mono); color: #f2e3b8; overflow-x: auto; white-space: nowrap; }
+.cmd button { border: 0; background: var(--night-2); color: var(--on-night); font: 700 .95rem var(--sans); padding: 0 18px; cursor: pointer; min-width: 84px; }
+.cmd button:hover { background: #2d3961; }
+.note { margin-top: 10px; font-size: .95rem; color: var(--on-night-muted); }
+details { margin-top: 26px; border-top: 1px solid #323c5e; padding-top: 18px; max-width: 760px; }
+summary { cursor: pointer; font-weight: 700; }
+details p, details li { color: var(--on-night-muted); }
+details ul { padding-left: 1.2em; }
+.install a { text-decoration-color: var(--thread-soft); }
+
+/* faq */
+.faq { max-width: 46em; margin-top: 30px; }
+.faq details { border-top: 1px solid var(--rule); padding: 18px 0; margin: 0; max-width: none; }
+.faq summary { font: 500 1.3rem var(--serif); list-style: none; display: flex; justify-content: space-between; gap: 16px; }
+.faq summary::-webkit-details-marker { display: none; }
+.faq summary::after { content: "+"; font-family: var(--sans); color: var(--thread); font-weight: 700; }
+.faq details[open] summary::after { content: "−"; }
+.faq details p { color: var(--muted); margin: 10px 0 0; }
+.faq code { font: .9em var(--mono); background: var(--page-2); padding: 1px 6px; border-radius: 4px; }
+
+/* footer */
+footer { border-top: 1px solid var(--rule); padding: 36px 0 48px; color: var(--muted); font-size: 1rem; }
+footer .wrap { display: flex; flex-wrap: wrap; gap: 12px 28px; align-items: center; }
+footer .brand { font-size: 1.15rem; color: var(--ink); }
+footer .links { display: flex; gap: 20px; flex-wrap: wrap; margin-left: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .hero .thread .draw { animation: none; stroke-dashoffset: 0; }
+}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <a class="brand" href="#"><img src="/img/logo.png" alt="">Loreloom</a>
+    <nav aria-label="Main">
+      <a href="#features">What's inside</a>
+      <a href="#yours">Privacy</a>
+      <a href="#cost">Cost</a>
+      <a href="#faq">Questions</a>
+      <a class="gh" href="https://github.com/prabhavmakkar/loreloom">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <h1>Write your novel.<br> Keep every word.</h1>
+    <svg class="thread" viewBox="0 0 560 34" aria-hidden="true">
+      <path class="draw" d="M2 17 C 50 2, 90 32, 140 17 S 230 2, 280 17 S 370 32, 420 17 S 510 2, 558 17"/>
+    </svg>
+    <p class="lede">Loreloom is free writing software for novelists. Plan your chapters, build your world, and get unstuck with an AI writing partner, all on your own laptop. Your book never leaves it.</p>
+    <div class="ctas">
+      <a class="btn gold" href="#install">Install Loreloom, free</a>
+      <a class="btn line" href="#features">See what's inside</a>
+    </div>
+    <p class="fine">For Mac and Linux. Windows in preview. Open source, no account needed.</p>
+    <div class="window">
+      <div class="bar" aria-hidden="true"><i></i><i></i><i></i></div>
+      <img src="/img/write.jpg" width="1400" height="900" alt="Loreloom's writing screen: chapters on the left, a chapter of a fantasy novel in the middle, and the AI helper's drafted passage on the right with an Insert at cursor button.">
+    </div>
+  </div>
+</section>
+
+<div class="story">
+  <div class="wrap">
+
+    <section class="part knot" id="features">
+      <h2>Everything a novel needs, nothing it doesn't</h2>
+      <p class="intro">A calm page to write on, with your world one click away. Made for people who write stories, not for people who write code.</p>
+      <div class="features">
+        <div>
+          <h3>A quiet page</h3>
+          <p>A clean, book-like editor that saves as you type. See your page and word count grow as you go.</p>
+        </div>
+        <div>
+          <h3>Chapters you can shuffle</h3>
+          <p>Every chapter on a card with its page count and status. Drag them into a new order whenever the story asks.</p>
+        </div>
+        <div>
+          <h3>Your world, kept</h3>
+          <p>Characters, places, rules of magic, and a dictionary of the words you invent. Type @ in your prose to link to any of them.</p>
+        </div>
+        <div>
+          <h3>A map of who's who</h3>
+          <p>See your characters as a web of trust, rivalry and secret pacts. Draw a line between two people to name what binds them.</p>
+        </div>
+        <div>
+          <h3>A writing partner, when you want one</h3>
+          <p>Brainstorm when you're stuck, draft the next scene, or ask for an honest review. The AI reads your world notes, so it remembers your rules.</p>
+        </div>
+        <div>
+          <h3>You keep the pen</h3>
+          <p>The AI never changes your chapter on its own. Every suggestion waits until you choose to insert it.</p>
+        </div>
+      </div>
+      <div class="shot">
+        <img src="/img/world.jpg" width="1400" height="900" alt="Loreloom's world view: a map connecting characters Kael Thorne, Mira Vale, the Ember Queen, Aldric Thorne and Sable, with places, rules and glossary entries below.">
+      </div>
+      <p class="caption">The world view: your characters, places, rules and glossary, side by side with the helper.</p>
+    </section>
+
+    <section class="part knot" id="yours">
+      <h2>Your book stays yours</h2>
+      <p class="intro">Loreloom is software you install, not a website you upload to. That changes everything about who owns your work.</p>
+      <ul class="promises">
+        <li><strong>It lives on your laptop</strong><span>Your book is a folder on your own computer. We have no servers, so there is nothing of yours for us to see, sell, or lose.</span></li>
+        <li><strong>No account, no tracking</strong><span>You don't sign up for Loreloom. It doesn't phone home or count what you do.</span></li>
+        <li><strong>Plain files you can open anywhere</strong><span>Every chapter is a simple text file. If you stop using Loreloom tomorrow, your book opens in any other app.</span></li>
+        <li><strong>Works offline</strong><span>Write on a plane or in a cabin. Only the AI helper needs the internet.</span></li>
+      </ul>
+    </section>
+
+    <section class="part knot" id="cost">
+      <h2>What it costs</h2>
+      <p class="intro">Loreloom is free and always will be. The AI helper is optional, and it runs on a Claude plan you pay Anthropic for directly, so there's no extra AI subscription layered on top.</p>
+      <div class="cost">
+        <div>
+          <h3>Loreloom</h3>
+          <p class="price">Free</p>
+          <p>The editor, chapters, world library, character map, and every future update. Open source under the MIT licence.</p>
+        </div>
+        <div>
+          <h3>AI helper (optional)</h3>
+          <p class="price">Your Claude plan</p>
+          <p>Uses your own Claude Pro or Max plan through Claude Code. Loreloom adds nothing on top. The free Claude plan doesn't include Claude Code.</p>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<section class="install" id="install">
+  <div class="wrap">
+    <h2>Install Loreloom</h2>
+    <p class="intro">It takes about three minutes. You'll paste one line into your computer's command window, and the installer does the rest. No admin password needed.</p>
+
+    <div class="tabs" role="tablist" aria-label="Your computer">
+      <button role="tab" id="tab-mac" aria-controls="p-mac" aria-selected="true">Mac</button>
+      <button role="tab" id="tab-win" aria-controls="p-win" aria-selected="false" tabindex="-1">Windows (preview)</button>
+      <button role="tab" id="tab-linux" aria-controls="p-linux" aria-selected="false" tabindex="-1">Linux</button>
+    </div>
+
+    <div class="panel" id="p-mac" role="tabpanel" aria-labelledby="tab-mac">
+      <ol class="steps">
+        <li><h3>Open Terminal</h3><p>Press <kbd>⌘</kbd> <kbd>Space</kbd>, type <strong>Terminal</strong>, and press <kbd>Return</kbd>. A small window with text opens.</p></li>
+        <li><h3>Paste this line and press Return</h3>
+          <div class="cmd"><code>curl -fsSL https://getloreloom.vercel.app/install.sh | bash</code><button type="button" data-copy>Copy</button></div>
+          <p class="note">Paste with <kbd>⌘</kbd> <kbd>V</kbd>. You'll see the installer's progress as it works.</p></li>
+        <li><h3>Answer two quick questions</h3><p>It asks whether to set up the AI helper and whether to sign in to Claude. Say no if you just want to write; you can add it later.</p></li>
+        <li><h3>Start writing</h3><p>Loreloom opens in your browser. Next time, open it like any other app: press <kbd>⌘</kbd> <kbd>Space</kbd> and type <strong>Loreloom</strong>.</p></li>
+      </ol>
+    </div>
+
+    <div class="panel" id="p-win" role="tabpanel" aria-labelledby="tab-win" hidden>
+      <ol class="steps">
+        <li><h3>Open PowerShell</h3><p>Click Start, type <strong>PowerShell</strong>, and press <kbd>Enter</kbd>.</p></li>
+        <li><h3>Paste this line and press Enter</h3>
+          <div class="cmd"><code>irm https://getloreloom.vercel.app/install.ps1 | iex</code><button type="button" data-copy>Copy</button></div>
+          <p class="note">Paste with a right-click. Windows support is new; if anything goes wrong, <a href="https://github.com/prabhavmakkar/loreloom/issues">tell us</a> and we'll fix it.</p></li>
+        <li><h3>Answer two quick questions</h3><p>Whether to set up the AI helper, and whether to sign in to Claude. Both are optional.</p></li>
+        <li><h3>Start writing</h3><p>Loreloom opens in your browser. Next time, find it in the Start menu.</p></li>
+      </ol>
+    </div>
+
+    <div class="panel" id="p-linux" role="tabpanel" aria-labelledby="tab-linux" hidden>
+      <ol class="steps">
+        <li><h3>Open a terminal</h3><p>Usually <kbd>Ctrl</kbd> <kbd>Alt</kbd> <kbd>T</kbd>.</p></li>
+        <li><h3>Paste this line and press Enter</h3>
+          <div class="cmd"><code>curl -fsSL https://getloreloom.vercel.app/install.sh | bash</code><button type="button" data-copy>Copy</button></div></li>
+        <li><h3>Start writing</h3><p>Loreloom opens in your browser and appears in your app menu.</p></li>
+      </ol>
+    </div>
+
+    <details>
+      <summary>What does that line do?</summary>
+      <p>It downloads the installer and runs it. Everything goes into your own user folder:</p>
+      <ul>
+        <li>A private copy of Node.js, the engine Loreloom runs on, checked against its official checksum. If you already have it, it's reused.</li>
+        <li>Loreloom itself, plus a Loreloom app icon.</li>
+        <li>If you say yes, Claude Code, using Anthropic's own official installer.</li>
+      </ul>
+      <p>You can <a href="/install.sh">read the Mac and Linux installer</a> or <a href="/install.ps1">the Windows one</a> before running them. Running the line again updates Loreloom and never touches your books.</p>
+    </details>
+  </div>
+</section>
+
+<div class="wrap">
+  <section class="part" id="faq">
+    <h2>Questions</h2>
+    <div class="faq">
+      <details><summary>Do I need to know anything about computers?</summary>
+        <p>No. If you can copy and paste, you can install Loreloom. After that it's an app you open like any other.</p></details>
+      <details><summary>Why does it open in my web browser?</summary>
+        <p>The browser is just the window. Loreloom runs on your computer, and the page you see is served from your own laptop, not the internet. You can keep writing with Wi-Fi switched off.</p></details>
+      <details><summary>Where is my book saved?</summary>
+        <p>In a folder called Loreloom in your home folder. Each chapter is a plain text file, so you can back it up, put it in Dropbox, or open it in any editor.</p></details>
+      <details><summary>Can I use it without the AI?</summary>
+        <p>Yes. Everything except the helper panel works without it, for free, forever.</p></details>
+      <details><summary>Will the AI write my book for me?</summary>
+        <p>Only if you ask, and only where you say. It brainstorms, drafts passages you can take or leave, and reviews your writing like a thoughtful reader. Nothing goes into your chapter until you click to insert it.</p></details>
+      <details><summary>Does the AI send my book anywhere?</summary>
+        <p>When you use the helper, the parts of your book it needs are sent to Claude through your own Claude account, the same way as when you chat with Claude yourself. Loreloom itself never sees your login or sends your book anywhere else.</p></details>
+      <details><summary>How do I update or uninstall it?</summary>
+        <p>To update, run the install line again. To uninstall on a Mac, delete Loreloom from your Applications folder and the hidden <code>.loreloom</code> folder in your home folder. Your books in the Loreloom folder stay put either way.</p></details>
+      <details><summary>Who makes it, and how is it free?</summary>
+        <p>Loreloom was started by a writer who got stuck on a fantasy novel and wanted better tools. It's open source, so anyone can read the code, improve it, or keep it alive. There are no servers to pay for, because everything runs on your laptop.</p></details>
+    </div>
+  </section>
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <a class="brand" href="#"><img src="/img/logo.png" alt="">Loreloom</a>
+    <span>Free and open source, MIT licence.</span>
+    <div class="links">
+      <a href="https://github.com/prabhavmakkar/loreloom">Source code</a>
+      <a href="https://github.com/prabhavmakkar/loreloom/issues">Report a problem</a>
+      <a href="#install">Install</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+(function () {
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+  function select(tab, focus) {
+    tabs.forEach(function (t) {
+      var on = t === tab;
+      t.setAttribute('aria-selected', on);
+      t.tabIndex = on ? 0 : -1;
+      document.getElementById(t.getAttribute('aria-controls')).hidden = !on;
+    });
+    if (focus) tab.focus();
+  }
+  tabs.forEach(function (t, i) {
+    t.addEventListener('click', function () { select(t); });
+    t.addEventListener('keydown', function (e) {
+      var d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+      if (d) { e.preventDefault(); select(tabs[(i + d + tabs.length) % tabs.length], true); }
+    });
+  });
+  var ua = navigator.userAgent;
+  if (/Windows/.test(ua)) select(document.getElementById('tab-win'));
+  else if (/Linux/.test(ua) && !/Android/.test(ua)) select(document.getElementById('tab-linux'));
+
+  document.querySelectorAll('[data-copy]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var text = b.previousElementSibling.textContent;
+      var done = function () { b.textContent = 'Copied'; setTimeout(function () { b.textContent = 'Copy'; }, 2000); };
+      if (navigator.clipboard) navigator.clipboard.writeText(text).then(done, function () {});
+      else { var r = document.createRange(); r.selectNodeContents(b.previousElementSibling); getSelection().removeAllRanges(); getSelection().addRange(r); }
+    });
+  });
+})();
+</script>
+</body>
+</html>
